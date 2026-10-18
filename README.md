@@ -4,7 +4,7 @@ Modern Human Resource Management System (HRMS) frontend built with Next.js 15, R
 
 ## 🚀 Features
 
-- **Authentication**: JWT-based auth with role-based routing (Admin, Manager, Employee), OTP password reset.
+- **Authentication**: JWT-based auth with role-based routing (Admin, Manager, Employee), OTP password reset, and registration/signup.
 - **Attendance & Face Recognition**: Live webcam capture integration for AI-powered facial attendance marking.
 - **Role-based Dashboards**:
   - **Admin Dashboard**: System-wide statistics, audit logs, employee directory, and payroll management.
@@ -15,9 +15,9 @@ Modern Human Resource Management System (HRMS) frontend built with Next.js 15, R
 
 ## 🛠️ Tech Stack
 
-- **Framework**: [Next.js 15](https://nextjs.org/) (App Router)
-- **UI & Styling**: React 18, [Tailwind CSS](https://tailwindcss.com/), [Radix UI](https://www.radix-ui.com/), Lucide Icons
-- **State Management**: [Zustand](https://github.com/pmndrs/zustand)
+- **Framework**: Next.js 15 (App Router)
+- **UI & Styling**: React 18, Tailwind CSS, Radix UI, Lucide Icons
+- **State Management**: Zustand
 - **Forms & Validation**: React Hook Form, Zod
 - **Charts**: Recharts
 - **HTTP Client**: Axios
@@ -25,9 +25,9 @@ Modern Human Resource Management System (HRMS) frontend built with Next.js 15, R
 ## 📋 Prerequisites
 
 - **Node.js**: v18.17.0 or higher
-- **npm** or **yarn** or **pnpm**
+- **npm** (comes with Node.js)
 
-## ⚙️ Getting Started
+## ⚙️ Local Development Setup
 
 ### 1. Installation
 
@@ -38,16 +38,20 @@ npm install
 
 ### 2. Environment Configuration
 
-Copy the sample environment file:
+Copy the sample environment file to `.env.local`:
 
 ```bash
 cp .env.local.example .env.local
 ```
 
-Configure your backend API URL in `.env.local`:
+Or on Windows PowerShell:
+```powershell
+Copy-Item .env.local.example .env.local
+```
 
+Ensure your API URL points to the backend:
 ```env
-NEXT_PUBLIC_API_URL=http://localhost:8000/api
+NEXT_PUBLIC_API_URL=http://localhost:8000/api/v1
 ```
 
 ### 3. Run Development Server
@@ -63,15 +67,6 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 ```bash
 npm run build
 npm start
-```
-
-## 🐳 Docker Setup
-
-Build and run using Docker:
-
-```bash
-docker build -t hrms-frontend .
-docker run -p 3000:3000 -e NEXT_PUBLIC_API_URL=http://localhost:8000/api hrms-frontend
 ```
 
 ## 📄 License

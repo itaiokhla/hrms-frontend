@@ -13,6 +13,7 @@ interface AuthState {
 
   setUser: (user: User) => void;
   setTokens: (accessToken: string, refreshToken: string) => void;
+  register: (userData: { username: string; email: string; password: string; role?: string }) => Promise<void>;
   login: (username: string, password: string) => Promise<void>;
   logout: () => void;
   clearAuth: () => void;
@@ -26,6 +27,11 @@ const clearAuthState = {
   refreshToken: null,
   isAuthenticated: false,
   error: null,
+};
+
+const getApiBaseUrl = () => {
+  const url = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
+  return url.replace(/\/$/, "");
 };
 
 export const useAuthStore = create<AuthState>()(
@@ -47,6 +53,50 @@ export const useAuthStore = create<AuthState>()(
           isAuthenticated: true,
         }),
 
+      register: async (userData) => {
+        set({
+          isLoading: true,
+          error: null,
+        });
+
+        try {
+          const response = await fetch(
+            `${getApiBaseUrl()}/auth/register`,
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify(userData),
+            }
+          );
+
+          if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.detail || "Registration failed");
+          }
+
+          const data: LoginResponse = await response.json();
+
+          set({
+            user: data.user,
+            accessToken: data.access_token,
+            refreshToken: data.refresh_token,
+            isAuthenticated: true,
+            error: null,
+          });
+        } catch (error) {
+          set({
+            error: error instanceof Error ? error.message : "Registration failed",
+          });
+          throw error;
+        } finally {
+          set({
+            isLoading: false,
+          });
+        }
+      },
+
       login: async (username: string, password: string) => {
         set({
           isLoading: true,
@@ -55,7 +105,7 @@ export const useAuthStore = create<AuthState>()(
 
         try {
           const response = await fetch(
-            `${process.env.NEXT_PUBLIC_API_URL}/auth/login`,
+            `${getApiBaseUrl()}/auth/login`,
             {
               method: "POST",
               headers: {

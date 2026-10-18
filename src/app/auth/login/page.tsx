@@ -347,7 +347,16 @@ switch (user?.role) {
 
 </form>
 
-<div className="mt-10 border-t pt-6 text-center">
+<div className="mt-6 text-center">
+  <p className="text-sm text-gray-600">
+    Don&apos;t have an account?{' '}
+    <Link href="/auth/signup" className="font-semibold text-blue-600 hover:text-blue-700">
+      Sign up
+    </Link>
+  </p>
+</div>
+
+<div className="mt-8 border-t pt-6 text-center">
 
   <p className="text-sm text-gray-500">
     © 2026 Salary Management System

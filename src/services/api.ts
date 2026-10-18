@@ -2,14 +2,9 @@ import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig, } from 'a
 import { useAuthStore } from '@/store/authStore';
 import toast from "react-hot-toast";
 
-if (!process.env.NEXT_PUBLIC_API_URL) {
-    throw new Error(
-        "NEXT_PUBLIC_API_URL is not configured."
-    );
-}
-
-const API_BASE_URL =
-process.env.NEXT_PUBLIC_API_URL;
+const API_BASE_URL = (
+  process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1"
+).replace(/\/$/, "");
 const API_ENDPOINTS = {
   LOGIN: "/auth/login",
   REFRESH_TOKEN: "/auth/refresh-token",
