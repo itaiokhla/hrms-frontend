@@ -1,43 +1,57 @@
-import type { Config } from 'tailwindcss'
+import type { Config } from "tailwindcss";
+
+const token = (name: string) => `hsl(var(--${name}) / <alpha-value>)`;
 
 const config: Config = {
-  darkMode: ['class'],
-  content: [
-    './src/pages/**/*.{js,ts,jsx,tsx,mdx}',
-    './src/components/**/*.{js,ts,jsx,tsx,mdx}',
-    './src/app/**/*.{js,ts,jsx,tsx,mdx}',
-  ],
+  darkMode: ["class"],
+  content: ["./src/**/*.{js,ts,jsx,tsx,mdx}"],
   theme: {
     extend: {
+      fontFamily: {
+        sans: ["var(--font-sans)", "ui-sans-serif", "system-ui", "sans-serif"],
+        display: ["var(--font-display)", "var(--font-sans)", "ui-sans-serif", "sans-serif"],
+      },
       colors: {
-        border: 'hsl(var(--border))',
-        input: 'hsl(var(--input))',
-        ring: 'hsl(var(--ring))',
-        background: 'hsl(var(--background))',
-        foreground: 'hsl(var(--foreground))',
-        primary: {
-          DEFAULT: 'hsl(var(--primary))',
-          foreground: 'hsl(var(--primary-foreground))',
+        border: token("border"),
+        input: token("input"),
+        ring: token("ring"),
+        background: token("background"),
+        foreground: token("foreground"),
+        surface: { DEFAULT: token("surface"), muted: token("surface-muted"), raised: token("surface-raised") },
+        primary: { DEFAULT: token("primary"), foreground: token("primary-foreground"), soft: token("primary-soft") },
+        muted: { DEFAULT: token("muted"), foreground: token("muted-foreground") },
+        accent: { DEFAULT: token("accent"), foreground: token("accent-foreground") },
+        success: { DEFAULT: token("success"), soft: token("success-soft") },
+        warning: { DEFAULT: token("warning"), soft: token("warning-soft") },
+        danger: { DEFAULT: token("danger"), soft: token("danger-soft") },
+        info: { DEFAULT: token("info"), soft: token("info-soft") },
+        sidebar: { DEFAULT: token("sidebar"), foreground: token("sidebar-foreground"), muted: token("sidebar-muted") },
+      },
+      borderRadius: { xl: "0.875rem", "2xl": "1.125rem", "3xl": "1.5rem" },
+      boxShadow: {
+        card: "0 1px 2px hsl(var(--shadow) / 0.06), 0 4px 16px -4px hsl(var(--shadow) / 0.08)",
+        lift: "0 8px 30px -8px hsl(var(--shadow) / 0.25)",
+        glow: "0 0 0 1px hsl(var(--primary) / 0.2), 0 10px 40px -10px hsl(var(--primary) / 0.45)",
+      },
+      keyframes: {
+        shimmer: { "100%": { transform: "translateX(100%)" } },
+        "float-slow": {
+          "0%, 100%": { transform: "translate3d(0,0,0) scale(1)" },
+          "50%": { transform: "translate3d(0,-14px,0) scale(1.04)" },
         },
-        secondary: {
-          DEFAULT: 'hsl(var(--secondary))',
-          foreground: 'hsl(var(--secondary-foreground))',
+        "pulse-ring": {
+          "0%": { boxShadow: "0 0 0 0 hsl(var(--primary) / 0.45)" },
+          "100%": { boxShadow: "0 0 0 14px hsl(var(--primary) / 0)" },
         },
-        destructive: {
-          DEFAULT: 'hsl(var(--destructive))',
-          foreground: 'hsl(var(--destructive-foreground))',
-        },
-        muted: {
-          DEFAULT: 'hsl(var(--muted))',
-          foreground: 'hsl(var(--muted-foreground))',
-        },
-        accent: {
-          DEFAULT: 'hsl(var(--accent))',
-          foreground: 'hsl(var(--accent-foreground))',
-        },
+      },
+      animation: {
+        shimmer: "shimmer 1.6s infinite",
+        "float-slow": "float-slow 9s ease-in-out infinite",
+        "pulse-ring": "pulse-ring 1.8s ease-out infinite",
       },
     },
   },
   plugins: [],
-}
-export default config
+};
+
+export default config;
