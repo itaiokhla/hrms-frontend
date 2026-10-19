@@ -86,6 +86,8 @@ const STATUS_TONES: Record<string, VariantProps<typeof badgeVariants>["tone"]> =
   late: "warning",
   "half-day": "warning",
   working: "info",
+  on_lunch: "primary",
+  incomplete: "danger",
   assigned: "primary",
   maintenance: "warning",
   rejected: "danger",

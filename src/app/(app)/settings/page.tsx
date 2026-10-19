@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import toast from "react-hot-toast";
 
 import { RequireAccess, useCan } from "@/components/access/Can";
+import { PolicySettings } from "@/components/attendance/PolicySettings";
 import { EmployeePicker, type PickedEmployee } from "@/components/shared/EmployeePicker";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Switch } from "@/components/ui/field";
@@ -34,6 +35,7 @@ function CompanySettings() {
   const tabs = [
     { value: "company", label: "Company" },
     { value: "policies", label: "Policies" },
+    { value: "attendance", label: "Attendance & location" },
     ...(can(me, P.DEPARTMENT_MANAGE) ? [{ value: "structure", label: "Departments & shifts" }] : []),
   ];
   return (
@@ -42,6 +44,7 @@ function CompanySettings() {
       <Tabs tabs={tabs} value={tab} onValueChange={setTab}>
         <TabPanel value="company"><General /></TabPanel>
         <TabPanel value="policies"><Policies /></TabPanel>
+        <TabPanel value="attendance"><PolicySettings /></TabPanel>
         {can(me, P.DEPARTMENT_MANAGE) && <TabPanel value="structure"><Structure /></TabPanel>}
       </Tabs>
     </div>

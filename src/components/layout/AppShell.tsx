@@ -19,6 +19,8 @@ import { usePathname, useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 
+import { LocationTracker } from "@/components/attendance/LocationTracker";
+import { TrackingIndicator } from "@/components/attendance/TrackingIndicator";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, MenuItem, MenuLabel, MenuSeparator } from "@/components/ui/overlay";
 import { Avatar } from "@/components/ui/primitives";
@@ -80,6 +82,8 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <div className="flex min-h-screen bg-background">
+      {/* One location controller per tab, alive across every in-app route change. */}
+      <LocationTracker />
       <aside className="sticky top-0 hidden h-screen w-[264px] shrink-0 lg:block">
         <Sidebar />
       </aside>
@@ -228,6 +232,7 @@ function Topbar({ onMenu }: { onMenu: () => void }) {
           Welcome back, <span className="font-medium text-foreground">{me?.user.full_name.split(" ")[0]}</span>
         </p>
       </div>
+      <TrackingIndicator />
       {mounted && (
         <Button
           variant="ghost"

@@ -127,6 +127,53 @@ export interface SecondaryLine {
   effective_until: string | null;
 }
 
+export type AttendanceState = "NOT_PUNCHED_IN" | "WORKING" | "ON_LUNCH" | "PUNCHED_OUT";
+export type AttendanceAction = "PUNCH_IN" | "LUNCH_IN" | "LUNCH_OUT" | "PUNCH_OUT";
+export type LocationMode = "OFF" | "OPTIONAL" | "REQUIRED";
+export type TrackingState = "NO_SESSION" | "NOT_APPLICABLE" | "ACTIVE" | "PAUSED" | "STOPPED";
+export type ScheduleState = "SCHEDULED" | "DUE" | "OVERDUE";
+export type SampleStatus =
+  | "CAPTURED"
+  | "PERMISSION_DENIED"
+  | "POSITION_UNAVAILABLE"
+  | "TIMEOUT"
+  | "INSECURE_CONTEXT"
+  | "UNSUPPORTED"
+  | "ERROR"
+  | "MISSED";
+export type MovementStatus = "BASELINE" | "WITHIN_RANGE" | "UNCERTAIN" | "LOW_ACCURACY" | "SIGNIFICANT_MOVEMENT_REVIEW";
+
+/** Canonical hours from the server (attendance_hours.compute). */
+export interface Hours {
+  gross_seconds: number | null;
+  lunch_seconds: number;
+  break_seconds: number;
+  excluded_seconds: number;
+  net_seconds: number | null;
+  provisional: boolean;
+  complete: boolean;
+  issues: string[];
+}
+
+export interface AttendanceBreak {
+  id: number;
+  kind: "LUNCH";
+  started_at: string;
+  ended_at: string | null;
+  is_paid: boolean;
+  end_reason: string | null;
+}
+
+export interface LocationSummary {
+  captured: number;
+  failed: number;
+  missed: number;
+  low_accuracy: number;
+  movement_flags: number;
+  exceptions: number;
+  review_pending: number;
+}
+
 export interface AttendanceRecord {
   id: number;
   employee_id: number;
@@ -135,12 +182,137 @@ export interface AttendanceRecord {
   date: string;
   check_in_time: string | null;
   check_out_time: string | null;
+  /** Net working seconds (attendance minus unpaid breaks). */
   working_seconds: number;
   status: "present" | "absent" | "late" | "half-day";
   source: "self" | "kiosk" | "manual";
   is_manual: boolean;
   face_match_score: number | null;
   notes: string | null;
+  attendance_state: AttendanceState;
+  closed_reason: string | null;
+  hours: Hours;
+  breaks: AttendanceBreak[];
+  tracking_state: string;
+  location: LocationSummary | null;
+}
+
+export interface AttendanceEvent {
+  id: number;
+  event_type: "PUNCH_IN" | "LUNCH_IN" | "LUNCH_OUT" | "PUNCH_OUT" | "SESSION_CLOSED" | "CORRECTION";
+  occurred_at: string;
+  source: string;
+  location_status: "CAPTURED" | "FAILED" | "EXCEPTION" | "NOT_PROVIDED" | "NOT_REQUIRED" | "NOT_APPLICABLE";
+  note: string | null;
+  face_match_score?: number | null;
+}
+
+export interface LocationSampleBrief {
+  id: number;
+  sample_type: "PUNCH_IN" | "LUNCH_IN" | "LUNCH_OUT" | "PUNCH_OUT" | "PERIODIC";
+  status: SampleStatus;
+  received_at: string;
+  captured_at: string | null;
+  accuracy_m: number | null;
+  accuracy_class: "PREFERRED" | "ACCEPTABLE" | "LOW" | null;
+  movement_status: MovementStatus | null;
+  distance_from_punch_in_m: number | null;
+  uncertainty_m: number | null;
+  is_recovery: boolean;
+  slot_due_at: string | null;
+  review_status: "PENDING" | "APPROVED" | "REJECTED" | "ACKNOWLEDGED" | null;
+  exception_reason: string | null;
+  error_message: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  redacted?: boolean;
+}
+
+export interface CapturePolicy {
+  punch: LocationMode;
+  lunch: LocationMode;
+  exception: "ALLOW_WITH_REASON" | "BLOCK";
+  reject_low_accuracy: boolean;
+  preferred_accuracy_m: number;
+  acceptable_accuracy_m: number;
+  timeout_ms: number;
+  max_attempts: number;
+  max_fix_age_seconds: number;
+  retention_days: number;
+}
+
+export interface AttendancePolicy {
+  version: string;
+  require_face: boolean;
+  require_face_for_lunch: boolean;
+  allow_multiple_lunches: boolean;
+  lunch_is_paid: boolean;
+  lunch_open_at_punch_out: "CONFIRM_AUTO_CLOSE" | "BLOCK";
+  max_shift_hours: number;
+  location: CapturePolicy;
+  tracking: { enabled: boolean; interval_minutes: number; grace_minutes: number; pause_on_lunch: boolean; movement_threshold_m: number };
+}
+
+export interface TrackingStatus {
+  attendance_id: number | null;
+  state: TrackingState;
+  stop_reason: string | null;
+  schedule_state: ScheduleState | null;
+  next_due_at: string | null;
+  grace_until: string | null;
+  overdue_since: string | null;
+  interval_minutes: number;
+  grace_minutes: number;
+  missed_count: number;
+  pending_missed: number;
+  last_capture: LocationSampleBrief | null;
+  last_attempt: LocationSampleBrief | null;
+  policy_version: string;
+  capture: CapturePolicy;
+  server_now: string;
+  replayed?: boolean;
+}
+
+export interface MyAttendance {
+  state: "not_checked_in" | "working" | "completed";
+  attendance_state: AttendanceState;
+  record: AttendanceRecord | null;
+  last_session: AttendanceRecord | null;
+  events: AttendanceEvent[];
+  actions: AttendanceAction[];
+  overnight: boolean;
+  tracking: TrackingStatus;
+  policy: AttendancePolicy;
+  server_now: string;
+  replayed?: boolean;
+}
+
+export interface SessionDetail extends AttendanceRecord {
+  events: AttendanceEvent[];
+  location_access: boolean;
+  samples: LocationSampleBrief[] | null;
+  tracking: TrackingStatus;
+}
+
+export interface LocationReviewItem extends LocationSampleBrief {
+  kind: "EXCEPTION" | "MOVEMENT";
+  attendance_id: number;
+  employee_id: number;
+  employee_name: string;
+  date: string;
+  reviewed_at: string | null;
+  review_note: string | null;
+}
+
+export interface HoursTotals {
+  sessions: number;
+  complete_sessions: number;
+  incomplete_sessions: number;
+  provisional_sessions: number;
+  gross_seconds: number;
+  lunch_seconds: number;
+  excluded_seconds: number;
+  net_seconds: number;
 }
 
 export interface TodaySummary {
@@ -150,6 +322,7 @@ export interface TodaySummary {
   absent_today: number;
   on_leave: number;
   working_now: number;
+  on_lunch_now: number;
   completed_today: number;
   late_today: number;
   attendance_percentage: number;
@@ -369,7 +542,7 @@ export interface DashboardData {
   scope?: "company" | "team";
   headcount?: number;
   me?: {
-    attendance: { state: "not_checked_in" | "working" | "completed"; record: AttendanceRecord | null };
+    attendance: MyAttendance;
     leave_balance: Record<string, LeaveBalance>;
     latest_payslip?: PayrollRecord | null;
   };

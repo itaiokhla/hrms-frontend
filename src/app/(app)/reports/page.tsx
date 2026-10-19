@@ -12,7 +12,7 @@ import { DataTable, EmptyState, PageHeader, StatCard, TabPanel, Tabs } from "@/c
 import { Card, CardHeader, StatusBadge } from "@/components/ui/primitives";
 import { api, downloadFile, errorMessage } from "@/lib/api";
 import { can, companyWide } from "@/lib/access";
-import { fmtDate, fmtMoney, fmtTime, titleCase, todayISO } from "@/lib/format";
+import { fmtDate, fmtHours, fmtMoney, fmtTime, titleCase, todayISO } from "@/lib/format";
 import { useApi } from "@/lib/hooks";
 import { P } from "@/lib/permissions.generated";
 
@@ -23,7 +23,10 @@ interface Report<R, S> {
   summary: S;
 }
 
-type AttendanceRow = { employee_id: number; employee_name: string; date: string; check_in_time: string | null; check_out_time: string | null; status: string };
+type AttendanceRow = {
+  employee_id: number; employee_name: string; date: string; check_in_time: string | null; check_out_time: string | null; status: string;
+  lunch_seconds: number; net_seconds: number | null; hours_complete: boolean; hours_provisional: boolean;
+};
 type LeaveRow = { employee_id: number; employee_name: string; leave_type: string; start_date: string; end_date: string; days: number; status: string };
 type PayrollRow = { employee_id: number; employee_name: string; salary_month: string; gross_salary: number; total_deductions: number; net_salary: number; status: string };
 type DeptRow = { department_id: number; department_name: string; total_employees: number; attendance: { present: number; absent: number; late: number }; payroll?: { total_salary: number } };
@@ -92,11 +95,14 @@ function AttendanceReport() {
         {can(me, P.REPORT_EXPORT) && <ExportButtons base="/reports/attendance" params={{ start_date: start, end_date: end }} />}
       </Card>
       {data && (
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
           <StatCard label="Present" value={data.summary.total_present} tone="success" />
           <StatCard label="Late" value={data.summary.total_late} tone="warning" delay={0.05} />
           <StatCard label="Half day" value={data.summary.total_half_day} tone="info" delay={0.1} />
           <StatCard label="Absent" value={data.summary.total_absent} tone="danger" delay={0.15} />
+          {/* Summed in seconds on the server, so it matches exports and the payroll snapshot exactly. */}
+          <StatCard label="Net hours worked" value={Math.floor((data.summary.total_net_seconds ?? 0) / 3600)} tone="primary" delay={0.2}
+            hint={`${fmtHours(data.summary.total_net_seconds ?? 0)} · ${data.summary.incomplete_sessions ?? 0} missing punch-out`} />
         </div>
       )}
       <Card>
@@ -108,6 +114,8 @@ function AttendanceReport() {
             { key: "d", header: "Date", cell: (r) => fmtDate(r.date) },
             { key: "i", header: "In", cell: (r) => fmtTime(r.check_in_time), hideOnMobile: true },
             { key: "o", header: "Out", cell: (r) => fmtTime(r.check_out_time), hideOnMobile: true },
+            { key: "l", header: "Lunch", cell: (r) => fmtHours(r.lunch_seconds), hideOnMobile: true },
+            { key: "n", header: "Net", cell: (r) => (r.hours_complete ? `${fmtHours(r.net_seconds)}${r.hours_provisional ? " so far" : ""}` : "—") },
             { key: "s", header: "Status", cell: (r) => <StatusBadge status={r.status} /> },
           ]} />
       </Card>

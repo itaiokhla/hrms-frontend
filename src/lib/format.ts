@@ -41,6 +41,26 @@ export function fmtDuration(seconds: number) {
   return `${h}h ${m.toString().padStart(2, "0")}m`;
 }
 
+/** Duration that may be unknown (a missing punch-out is never shown as zero). */
+export function fmtHours(seconds: number | null | undefined) {
+  return seconds === null || seconds === undefined ? "—" : fmtDuration(Math.max(0, seconds));
+}
+
+/** H:MM:SS for live counters; whole seconds are truncated, never rounded up. */
+export function fmtClock(seconds: number) {
+  const total = Math.max(0, Math.floor(seconds));
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  return `${h}:${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
+}
+
+/** Distances and accuracy radii: metres below 1 km, kilometres above. */
+export function fmtMeters(value: number | null | undefined) {
+  if (value === null || value === undefined) return "—";
+  return value < 1000 ? `${Math.round(value)} m` : `${(value / 1000).toFixed(value < 10_000 ? 2 : 1)} km`;
+}
+
 export function initials(name?: string | null) {
   if (!name) return "?";
   const parts = name.trim().split(/\s+/);

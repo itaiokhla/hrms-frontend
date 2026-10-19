@@ -37,16 +37,21 @@
     ]
   },
   "include": [
-    "next-env.d.ts",
     "**/*.ts",
     "**/*.tsx",
-    ".next/types/**/*.ts"
+    ".next/types/**/*.ts",
+    "next-env.d.ts",
+    ".next-e2e/types/**/*.ts"
   ],
   "exclude": [
     "node_modules",
     "e2e",
+    "e2e-gps",
     "playwright.config.ts",
+    "playwright.gps.config.ts",
     "playwright-report",
-    "test-results"
+    "playwright-report-gps",
+    "test-results",
+    "test-results-gps"
   ]
 }

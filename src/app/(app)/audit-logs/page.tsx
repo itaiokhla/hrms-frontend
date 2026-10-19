@@ -14,7 +14,7 @@ import { useApi } from "@/lib/hooks";
 import { P } from "@/lib/permissions.generated";
 import type { AuditEntry } from "@/lib/types";
 
-const MODULES = ["Authentication", "Users", "Roles", "Employees", "Organization", "Attendance", "Leave", "Payroll", "Compensation", "Assets", "Holidays", "Reports", "Settings", "Company"];
+const MODULES = ["Authentication", "Users", "Roles", "Employees", "Organization", "Attendance", "Location", "Leave", "Payroll", "Compensation", "Assets", "Holidays", "Reports", "Settings", "Company"];
 const LIMIT = 50;
 
 export default function AuditLogsPage() {

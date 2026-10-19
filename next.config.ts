@@ -9,10 +9,13 @@ const securityHeaders = [
   { key: "X-Content-Type-Options", value: "nosniff" },
   { key: "X-Frame-Options", value: "DENY" },
   { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
-  { key: "Permissions-Policy", value: "camera=(self), microphone=(), geolocation=()" },
+  // Location is used for attendance checks on this origin only (never by embedded third parties).
+  { key: "Permissions-Policy", value: "camera=(self), microphone=(), geolocation=(self)" },
 ];
 
 const nextConfig: NextConfig = {
+  // A second build (e.g. for browser tests) can live beside a running dev server.
+  distDir: process.env.NEXT_DIST_DIR || ".next",
   reactStrictMode: true,
   poweredByHeader: false,
   devIndicators: false,
