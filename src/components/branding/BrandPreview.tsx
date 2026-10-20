@@ -137,12 +137,12 @@ export function BrandPreview({ brand }: { brand: AdminEffective }) {
           {surface === "email" && (
             <div className="h-72 bg-[#F3F4F6] p-3 text-[#111827]">
               <div className="overflow-hidden rounded-xl bg-white">
-                <div className="flex h-10 items-center px-3" style={{ background: brand.exact.primary }}>
+                <div className="flex h-10 items-center border-b-4 bg-white px-3" style={{ borderColor: brand.exact.primary }}>
                   {logo ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={brand.logos.email ?? logo} alt="" className="max-h-6 object-contain" />
                   ) : (
-                    <span className="text-xs font-bold text-white">{brand.display_name}</span>
+                    <span className="text-xs font-bold text-primary">{brand.display_name}</span>
                   )}
                 </div>
                 <div className="space-y-2 p-3 text-[11px]">
