@@ -40,6 +40,8 @@ interface PartnersResponse {
   brand_fields: Record<string, string>;
 }
 
+// Every tenant always gets these, whatever its partner grants (app/core/entitlements.py).
+const ALWAYS_INCLUDED = new Set(["branding.logo_colors", "domains.platform_subdomain"]);
 const TEXT_FIELDS = ["product_name", "short_name", "tagline", "legal_footer", "support_email", "support_url", "email_sender_name"];
 const LOCKABLE = ["product_name", "short_name", "show_powered_by", "primary_color", "accent_color", "font", "sidebar_style", "mark", "logo_light"];
 
@@ -194,8 +196,12 @@ function PartnerCard({ partner, meta, onChanged }: { partner: Partner; meta: Par
             <div className="space-y-2">
               {Object.entries(meta.entitlements).map(([key, text]) => (
                 <label key={key} className="flex items-center justify-between rounded-xl border border-border px-3 py-2 text-sm">
-                  {text}
-                  <Switch checked={!!ents[key]} onChange={(v) => setEnts({ ...ents, [key]: v })} label={text} />
+                  <span>
+                    {text}
+                    {ALWAYS_INCLUDED.has(key) && <span className="block text-xs text-muted-foreground">Always included</span>}
+                  </span>
+                  <Switch checked={ALWAYS_INCLUDED.has(key) || !!ents[key]} disabled={ALWAYS_INCLUDED.has(key)}
+                    onChange={(v) => setEnts({ ...ents, [key]: v })} label={text} />
                 </label>
               ))}
             </div>
