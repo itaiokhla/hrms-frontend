@@ -6,12 +6,12 @@ import { NextResponse, type NextRequest } from "next/server";
  *    client-sent copies are dropped first. FastAPI trusts the host only with the key.
  * 2. Brand preview: ?brand_preview=<token> becomes a short-lived HttpOnly cookie so the
  *    server-rendered layout can paint the draft; ?brand_preview=off ends the preview.
- * 3. The platform console exists only on platform hosts; workspaces are created there too.
+ * 3. The platform and partner consoles exist only on platform hosts; workspaces are created there too.
  * 4. UX-only routing to the login page for visitors without a session cookie. The API
  *    enforces authorization on every request; this is not a security boundary.
  */
 const PUBLIC = [
-  "/login", "/signup", "/forgot-password", "/verify-otp", "/reset-password", "/accept-invite", "/platform", "/auth/handoff",
+  "/login", "/signup", "/forgot-password", "/verify-otp", "/reset-password", "/accept-invite", "/platform", "/partner", "/auth/handoff",
   "/manifest.webmanifest",
 ];
 const PLATFORM_HOSTS = (process.env.PLATFORM_HOSTS || "localhost,127.0.0.1")
@@ -45,7 +45,8 @@ export function middleware(request: NextRequest) {
 
   if (pathname.startsWith("/api/")) return pass();
 
-  if ((pathname === "/platform" || pathname.startsWith("/platform/")) && !isPlatformHost) {
+  const operatorConsole = ["/platform", "/partner"].some((p) => pathname === p || pathname.startsWith(`${p}/`));
+  if (operatorConsole && !isPlatformHost) {
     return new NextResponse("Not found", { status: 404, headers: { "Content-Type": "text/plain" } });
   }
   if (pathname === "/signup" && !isPlatformHost) {

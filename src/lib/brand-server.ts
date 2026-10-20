@@ -37,7 +37,8 @@ export const getBrand = cache(async (): Promise<Brand> => {
   const host = await requestHost();
   const jar = await cookies();
   // The platform console is never white-labelled: no tenant hint or preview there.
-  const platformConsole = ((await headers()).get("x-hrms-pathname") || "").startsWith("/platform");
+  const path = (await headers()).get("x-hrms-pathname") || "";
+  const platformConsole = path.startsWith("/platform") || path.startsWith("/partner");
   const hint = platformConsole ? "" : jar.get(HINT_COOKIE)?.value ?? "";
   const preview = platformConsole ? "" : jar.get(PREVIEW_COOKIE)?.value ?? "";
   const key = `${host}|${hint}`;

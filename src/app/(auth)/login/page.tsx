@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Field, Input } from "@/components/ui/field";
 import { api, errorMessage } from "@/lib/api";
 import type { Me } from "@/lib/types";
+import { safeNext } from "@/lib/safe-redirect";
 import { useSession } from "@/store/session";
 
 const schema = z.object({
@@ -40,10 +41,6 @@ function followHandoff(url: string): boolean {
   }
 }
 
-function safeNext(next: string | null) {
-  return next && next.startsWith("/") && !next.startsWith("//") && !next.startsWith("/login") ? next : "/dashboard";
-}
-
 function LoginForm() {
   const router = useRouter();
   const params = useSearchParams();
@@ -58,7 +55,7 @@ function LoginForm() {
 
   const finish = (me: Me) => {
     setMe(me);
-    router.replace(safeNext(params.get("next")));
+    router.replace(safeNext(params.get("next"), window.location.origin));
   };
 
   const onSubmit = async (data: FormData) => {
