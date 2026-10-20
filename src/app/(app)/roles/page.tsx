@@ -24,6 +24,8 @@ const SHORT: Record<Scope, string> = {
   REPORTING_TREE: "Tree",
   DEPARTMENT: "Dept",
   ASSIGNED_GROUP: "Assigned",
+  LEGAL_ENTITY: "Entity",
+  BRANCH: "Branch",
   COMPANY: "Company",
 };
 

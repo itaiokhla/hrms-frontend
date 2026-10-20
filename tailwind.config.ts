@@ -8,8 +8,14 @@ const config: Config = {
   theme: {
     extend: {
       fontFamily: {
-        sans: ["var(--font-sans)", "ui-sans-serif", "system-ui", "sans-serif"],
-        display: ["var(--font-display)", "var(--font-sans)", "ui-sans-serif", "sans-serif"],
+        sans: [
+          "var(--brand-font-sans, var(--font-sans))", "var(--font-noto-devanagari)", "var(--font-noto-arabic)",
+          "ui-sans-serif", "system-ui", "sans-serif",
+        ],
+        display: [
+          "var(--brand-font-display, var(--font-display))", "var(--brand-font-sans, var(--font-sans))",
+          "var(--font-noto-devanagari)", "var(--font-noto-arabic)", "ui-sans-serif", "sans-serif",
+        ],
       },
       colors: {
         border: token("border"),
@@ -25,9 +31,21 @@ const config: Config = {
         warning: { DEFAULT: token("warning"), soft: token("warning-soft") },
         danger: { DEFAULT: token("danger"), soft: token("danger-soft") },
         info: { DEFAULT: token("info"), soft: token("info-soft") },
-        sidebar: { DEFAULT: token("sidebar"), foreground: token("sidebar-foreground"), muted: token("sidebar-muted") },
+        sidebar: {
+          DEFAULT: token("sidebar"),
+          foreground: token("sidebar-foreground"),
+          muted: token("sidebar-muted"),
+          active: token("sidebar-active"),
+          "active-foreground": token("sidebar-active-foreground"),
+        },
       },
-      borderRadius: { xl: "0.875rem", "2xl": "1.125rem", "3xl": "1.5rem" },
+      // Brand corner style (SHARP / ROUNDED / PILL) sets these variables; defaults in globals.css.
+      borderRadius: {
+        lg: "var(--radius-lg)",
+        xl: "var(--radius-xl)",
+        "2xl": "var(--radius-2xl)",
+        "3xl": "var(--radius-3xl)",
+      },
       boxShadow: {
         card: "0 1px 2px hsl(var(--shadow) / 0.06), 0 4px 16px -4px hsl(var(--shadow) / 0.08)",
         lift: "0 8px 30px -8px hsl(var(--shadow) / 0.25)",

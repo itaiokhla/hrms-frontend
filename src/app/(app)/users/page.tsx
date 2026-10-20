@@ -6,6 +6,7 @@ import { useState } from "react";
 import toast from "react-hot-toast";
 
 import { RequireAccess, useCan } from "@/components/access/Can";
+import { ScopeTargets } from "@/components/shared/ScopeTargets";
 import { EmployeePicker, type PickedEmployee } from "@/components/shared/EmployeePicker";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Select } from "@/components/ui/field";
@@ -260,6 +261,9 @@ function UserDrawer({ userId, onClose, onChanged }: { userId: number | null; onC
                 roles ? <RolePicker roles={roles} selected={currentRoles} onChange={setRoleIds} /> : <Skeleton className="h-24" />}
             </section>
           )}
+
+          <ScopeTargets key={`${userId}-${user.roles.map((r) => r.id).join(",")}`} userId={user.id}
+            editable={can(me, P.USER_ASSIGN_ROLE) && !isSelf} />
 
           <section>
             <p className="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">Effective access</p>

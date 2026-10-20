@@ -54,9 +54,9 @@ function Payslips() {
                   <p className="text-sm text-muted-foreground">{fmtDate(p.salary_month, "MMMM yyyy")}</p>
                   <StatusBadge status={p.status} />
                 </div>
-                <p className="mt-3 font-display text-2xl font-semibold">{fmtMoney(p.net_salary, currency)}</p>
+                <p className="mt-3 font-display text-2xl font-semibold">{fmtMoney(p.net_salary, p.currency ?? currency)}</p>
                 <p className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
-                  Gross {fmtMoney(p.gross_salary, currency)} <ChevronRight className="ml-auto h-4 w-4 transition-transform group-hover:translate-x-1" />
+                  Gross {fmtMoney(p.gross_salary, p.currency ?? currency)} <ChevronRight className="ml-auto h-4 w-4 transition-transform group-hover:translate-x-1" />
                 </p>
               </Card>
             </motion.button>

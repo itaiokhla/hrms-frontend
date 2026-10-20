@@ -3,7 +3,6 @@
 import { AnimatePresence, motion } from "framer-motion";
 import {
   Bell,
-  Building2,
   CheckCheck,
   CreditCard,
   LogOut,
@@ -20,6 +19,8 @@ import { useTheme } from "next-themes";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 
 import { LocationTracker } from "@/components/attendance/LocationTracker";
+import { BrandMark, BrandWordmark } from "@/components/brand/BrandLogo";
+import { useBrand } from "@/components/brand/BrandProvider";
 import { TrackingIndicator } from "@/components/attendance/TrackingIndicator";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, MenuItem, MenuLabel, MenuSeparator } from "@/components/ui/overlay";
@@ -27,6 +28,7 @@ import { Avatar } from "@/components/ui/primitives";
 import { api, onSessionEvent } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import { fromNow } from "@/lib/format";
+import type { Brand } from "@/lib/brand";
 import { navFor } from "@/lib/navigation";
 import type { AppNotification } from "@/lib/types";
 import { useSession } from "@/store/session";
@@ -37,8 +39,18 @@ export function AppShell({ children }: { children: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const { status, me, load, expire } = useSession();
+  const { brand, applyBrand } = useBrand();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [blocker, setBlocker] = useState<Blocker>(null);
+
+  // A published brand change reaches open tabs without a reload (01 §8 "live update").
+  useEffect(() => {
+    if (!me?.brand_version || brand.preview || me.brand_version === brand.version) return;
+    api
+      .get<Brand>("/branding/current")
+      .then((next) => next.version !== brand.version && applyBrand(next))
+      .catch(() => undefined);
+  }, [me?.brand_version, brand.version, brand.preview, applyBrand]);
 
   useEffect(() => {
     if (status === "idle") void load();
@@ -98,10 +110,10 @@ export function AppShell({ children }: { children: ReactNode }) {
               onClick={() => setMobileOpen(false)}
             />
             <motion.aside
-              className="fixed inset-y-0 left-0 z-50 w-[280px] lg:hidden"
-              initial={{ x: "-100%" }}
+              className="fixed inset-y-0 start-0 z-50 w-[280px] lg:hidden"
+              initial={{ x: brand.dir === "rtl" ? "100%" : "-100%" }}
               animate={{ x: 0 }}
-              exit={{ x: "-100%" }}
+              exit={{ x: brand.dir === "rtl" ? "100%" : "-100%" }}
               transition={{ type: "spring", stiffness: 340, damping: 34 }}
             >
               <Sidebar onClose={() => setMobileOpen(false)} />
@@ -111,6 +123,12 @@ export function AppShell({ children }: { children: ReactNode }) {
       </AnimatePresence>
       <div className="flex min-w-0 flex-1 flex-col">
         <Topbar onMenu={() => setMobileOpen(true)} />
+        {brand.preview && (
+          <div className="flex flex-wrap items-center justify-center gap-3 bg-warning-soft px-4 py-2 text-sm text-warning" role="status" data-testid="preview-banner">
+            You are previewing unpublished branding. Nobody else sees it.
+            <a href="?brand_preview=off" className="font-semibold underline">Exit preview</a>
+          </div>
+        )}
         <main className="mx-auto w-full max-w-[1400px] flex-1 px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
           <AnimatePresence mode="wait">
             <motion.div
@@ -132,19 +150,34 @@ export function AppShell({ children }: { children: ReactNode }) {
 function Sidebar({ onClose }: { onClose?: () => void }) {
   const pathname = usePathname();
   const me = useSession((s) => s.me)!;
+  const { brand } = useBrand();
   const groups = useMemo(() => navFor(me), [me]);
+  const surface = brand.sidebar_style === "LIGHT" ? "light" : "dark";
+  // The most specific matching entry is active (/settings/branding is not also "Company settings").
+  const activeHref = groups
+    .flatMap((g) => g.items.map((i) => i.href))
+    .filter((href) => pathname === href || pathname.startsWith(`${href}/`))
+    .sort((x, y) => y.length - x.length)[0];
+  const hasLogo = !!(brand.logos.light || brand.logos.dark);
   return (
     <div className="flex h-full flex-col bg-sidebar text-sidebar-foreground">
       <div className="flex items-center justify-between gap-3 px-5 pb-4 pt-5">
-        <Link href="/dashboard" className="flex min-w-0 items-center gap-3">
-          <CompanyMark />
+        <Link
+          href="/dashboard"
+          className={cn("flex min-w-0 gap-3", hasLogo ? "flex-col items-start gap-1.5" : "items-center")}
+          title={brand.display_name}
+          data-testid="sidebar-brand"
+        >
+          {hasLogo ? <BrandWordmark brand={brand} surface={surface} height={38} /> : <BrandMark brand={brand} />}
           <div className="min-w-0">
-            <p className="truncate font-display text-[15px] font-semibold">{me.company.name}</p>
-            <p className="text-[11px] uppercase tracking-[0.18em] text-sidebar-muted">HRMS</p>
+            {!hasLogo && <p className="truncate font-display text-[15px] font-semibold">{brand.display_name || me.company.name}</p>}
+            <p className="truncate text-[11px] uppercase tracking-[0.18em] text-sidebar-muted" data-testid="sidebar-product">
+              {brand.product_name}
+            </p>
           </div>
         </Link>
         {onClose && (
-          <button onClick={onClose} className="rounded-lg p-1.5 text-sidebar-muted hover:bg-white/10" aria-label="Close menu">
+          <button onClick={onClose} className="rounded-lg p-1.5 text-sidebar-muted hover:bg-sidebar-foreground/10" aria-label="Close menu">
             <X className="h-5 w-5" />
           </button>
         )}
@@ -155,7 +188,7 @@ function Sidebar({ onClose }: { onClose?: () => void }) {
             <p className="mb-1.5 px-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-sidebar-muted">{group.label}</p>
             <ul className="space-y-0.5">
               {group.items.map((item) => {
-                const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
+                const active = item.href === activeHref;
                 return (
                   <li key={item.href}>
                     <Link
@@ -163,13 +196,15 @@ function Sidebar({ onClose }: { onClose?: () => void }) {
                       aria-current={active ? "page" : undefined}
                       className={cn(
                         "group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors",
-                        active ? "text-white" : "text-sidebar-foreground/75 hover:bg-white/5 hover:text-white",
+                        active
+                          ? "text-sidebar-active-foreground"
+                          : "text-sidebar-foreground/80 hover:bg-sidebar-foreground/10 hover:text-sidebar-foreground",
                       )}
                     >
                       {active && (
                         <motion.span
                           layoutId="nav-active"
-                          className="absolute inset-0 rounded-xl bg-gradient-to-r from-primary/90 to-primary/60 shadow-glow"
+                          className="absolute inset-0 rounded-xl bg-sidebar-active shadow-glow"
                           transition={{ type: "spring", stiffness: 420, damping: 36 }}
                         />
                       )}
@@ -183,7 +218,7 @@ function Sidebar({ onClose }: { onClose?: () => void }) {
           </div>
         ))}
       </nav>
-      <div className="m-3 rounded-2xl bg-white/5 p-3">
+      <div className="m-3 rounded-2xl bg-sidebar-foreground/5 p-3">
         <div className="flex items-center gap-3">
           <Avatar name={me.user.full_name} src={me.employee?.has_photo ? `/api/v1/employees/${me.employee.id}/photo` : null} size={36} />
           <div className="min-w-0">
@@ -193,20 +228,6 @@ function Sidebar({ onClose }: { onClose?: () => void }) {
         </div>
       </div>
     </div>
-  );
-}
-
-function CompanyMark() {
-  const [failed, setFailed] = useState(false);
-  return (
-    <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-br from-primary to-accent shadow-glow">
-      {failed ? (
-        <Building2 className="h-5 w-5 text-white" />
-      ) : (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src="/api/v1/settings/logo" alt="" className="h-full w-full bg-white object-contain" onError={() => setFailed(true)} />
-      )}
-    </span>
   );
 }
 

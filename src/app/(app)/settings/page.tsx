@@ -1,14 +1,15 @@
 "use client";
 
-import { Building2, Clock3, Upload, Plus, Wallet } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { Building2, Clock3, Palette, Plus, Wallet } from "lucide-react";
+import Link from "next/link";
+import { useEffect, useState } from "react";
 import toast from "react-hot-toast";
 
 import { RequireAccess, useCan } from "@/components/access/Can";
 import { PolicySettings } from "@/components/attendance/PolicySettings";
 import { EmployeePicker, type PickedEmployee } from "@/components/shared/EmployeePicker";
 import { Button } from "@/components/ui/button";
-import { Field, Input, Switch } from "@/components/ui/field";
+import { Field, Input, Select, Switch } from "@/components/ui/field";
 import { DataTable, PageHeader, TabPanel, Tabs } from "@/components/ui/layout";
 import { Modal } from "@/components/ui/overlay";
 import { Card, CardHeader, Skeleton, StatusBadge } from "@/components/ui/primitives";
@@ -73,22 +74,8 @@ function useSettings() {
 
 function General() {
   const { data, setData, save, saving } = useSettings();
-  const [logoVersion, setLogoVersion] = useState(0);
-  const file = useRef<HTMLInputElement>(null);
   if (!data) return <Skeleton className="h-72 rounded-2xl" />;
   const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement>) => setData({ ...data, [k]: e.target.value });
-
-  const upload = async (f: File) => {
-    const form = new FormData();
-    form.append("file", f);
-    try {
-      await api.post("/settings/logo", form);
-      toast.success("Logo updated");
-      setLogoVersion((v) => v + 1);
-    } catch (e) {
-      toast.error(errorMessage(e));
-    }
-  };
 
   return (
     <div className="grid gap-6 xl:grid-cols-[1fr_320px]">
@@ -107,16 +94,19 @@ function General() {
         </div>
       </Card>
       <Card className="p-5">
-        <p className="font-semibold">Logo</p>
-        <p className="mt-1 text-sm text-muted-foreground">Shown in your team's sidebar. PNG or JPG, up to 2 MB.</p>
-        <div className="mt-4 flex h-32 items-center justify-center overflow-hidden rounded-2xl border border-dashed border-border bg-surface-muted">
+        <p className="font-semibold">Branding</p>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Logos, colours, the sign-in page, emails, payslip branding and your company&apos;s web address.
+        </p>
+        <div className="mt-4 flex h-24 items-center justify-center overflow-hidden rounded-2xl border border-dashed border-border bg-surface-muted">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img key={logoVersion} src={`/api/v1/settings/logo?v=${logoVersion}`} alt="Company logo" className="max-h-full max-w-full object-contain"
+          <img src="/api/v1/settings/logo" alt="Company logo" className="max-h-full max-w-full object-contain"
             onError={(e) => ((e.target as HTMLImageElement).style.display = "none")} />
           <Building2 className="h-8 w-8 text-muted-foreground" />
         </div>
-        <input ref={file} type="file" accept="image/png,image/jpeg" className="hidden" onChange={(e) => e.target.files?.[0] && upload(e.target.files[0])} />
-        <Button variant="secondary" className="mt-4 w-full" onClick={() => file.current?.click()}><Upload className="h-4 w-4" /> Upload logo</Button>
+        <Link href="/settings/branding" className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-border bg-surface px-4 py-2 text-sm font-medium shadow-sm hover:bg-surface-muted">
+          <Palette className="h-4 w-4" /> Open Branding &amp; domains
+        </Link>
       </Card>
     </div>
   );
@@ -174,7 +164,8 @@ function Structure() {
   const saveDept = async () => {
     if (!dept) return;
     try {
-      const body = { name: dept.name, description: dept.description || null, head_employee_id: head?.id ?? null, is_active: dept.is_active ?? true };
+      const body = { name: dept.name, description: dept.description || null, head_employee_id: head?.id ?? null,
+        parent_department_id: dept.parent_department_id ?? null, is_active: dept.is_active ?? true };
       if (dept.id) await api.put(`/departments/${dept.id}`, body);
       else await api.post("/departments", body);
       toast.success("Department saved");
@@ -208,6 +199,7 @@ function Structure() {
           columns={[
             { key: "n", header: "Department", cell: (d) => <span className="font-medium">{d.name}</span> },
             { key: "h", header: "Head", cell: (d) => d.head_name ?? "—" },
+            { key: "p", header: "Part of", hideOnMobile: true, cell: (d) => departments?.find((x) => x.id === d.parent_department_id)?.name ?? "—" },
             { key: "c", header: "People", cell: (d) => d.employee_count },
             { key: "s", header: "Status", cell: (d) => <StatusBadge status={d.is_active ? "active" : "deactivated"} label={d.is_active ? "Active" : "Inactive"} /> },
           ]} />
@@ -229,6 +221,12 @@ function Structure() {
             <Field label="Name" required><Input value={dept.name ?? ""} onChange={(e) => setDept({ ...dept, name: e.target.value })} /></Field>
             <Field label="Description"><Input value={dept.description ?? ""} onChange={(e) => setDept({ ...dept, description: e.target.value })} /></Field>
             <Field label="Department head"><EmployeePicker value={head} onChange={setHead} /></Field>
+            <Field label="Part of (makes this a team)" hint="A department cannot sit under itself or one of its own teams.">
+              <Select value={dept.parent_department_id ?? ""} onChange={(e) => setDept({ ...dept, parent_department_id: e.target.value ? Number(e.target.value) : null })}>
+                <option value="">Top level</option>
+                {(departments ?? []).filter((d) => d.id !== dept.id).map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+              </Select>
+            </Field>
             <label className="flex items-center justify-between rounded-xl border border-border px-4 py-3 text-sm">Active
               <Switch checked={dept.is_active ?? true} onChange={(v) => setDept({ ...dept, is_active: v })} label="Active" /></label>
           </div>

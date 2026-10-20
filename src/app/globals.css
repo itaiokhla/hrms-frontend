@@ -30,7 +30,13 @@
     --sidebar: 233 40% 12%;
     --sidebar-foreground: 228 30% 92%;
     --sidebar-muted: 230 20% 62%;
+    --sidebar-active: 243 75% 59%;
+    --sidebar-active-foreground: 0 0% 100%;
     --shadow: 225 40% 20%;
+    --radius-lg: 0.5rem;
+    --radius-xl: 0.875rem;
+    --radius-2xl: 1.125rem;
+    --radius-3xl: 1.5rem;
     color-scheme: light;
   }
 
@@ -61,8 +67,38 @@
     --sidebar: 230 30% 6%;
     --sidebar-foreground: 228 30% 92%;
     --sidebar-muted: 230 15% 58%;
+    --sidebar-active: 243 75% 59%;
+    --sidebar-active-foreground: 0 0% 100%;
     --shadow: 230 50% 2%;
     color-scheme: dark;
+  }
+
+  /* Brand fonts (curated, self-hosted through next/font; no third-party font requests). */
+  html[data-font="POPPINS"] {
+    --brand-font-sans: var(--font-poppins);
+    --brand-font-display: var(--font-poppins);
+  }
+  html[data-font="ROBOTO"] {
+    --brand-font-sans: var(--font-roboto);
+    --brand-font-display: var(--font-roboto);
+  }
+  html[data-font="NOTO"] {
+    --brand-font-sans: var(--font-noto), var(--font-noto-devanagari), var(--font-noto-arabic);
+    --brand-font-display: var(--font-noto), var(--font-noto-devanagari), var(--font-noto-arabic);
+  }
+  html[data-font="SYSTEM"] {
+    --brand-font-sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --brand-font-display: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  /* Right-to-left locales always use Noto for their script, whatever font the brand chose. */
+  html[dir="rtl"] {
+    --brand-font-sans: var(--font-noto-arabic), var(--font-noto);
+    --brand-font-display: var(--font-noto-arabic), var(--font-noto);
+  }
+  /* The layout mirrors, but each block of text takes its direction from its own first letter,
+     so untranslated English labels keep their punctuation in place inside a right-to-left page. */
+  html[dir="rtl"] :is(p, h1, h2, h3, h4, li, dt, dd, td, th, label) {
+    unicode-bidi: plaintext;
   }
 
   * {

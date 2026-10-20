@@ -7,6 +7,7 @@ import toast from "react-hot-toast";
 
 import { useCan } from "@/components/access/Can";
 import { EmployeePicker, type PickedEmployee } from "@/components/shared/EmployeePicker";
+import { PlacementTimeline } from "@/components/shared/PlacementTimeline";
 import { Button } from "@/components/ui/button";
 import { Sheet, useConfirm } from "@/components/ui/overlay";
 import { Avatar, Badge, Divider, Skeleton, StatusBadge } from "@/components/ui/primitives";
@@ -188,6 +189,12 @@ export function EmployeeDrawer({
                 ? [["Base salary", fmtMoney(employee.base_salary ?? null, me?.company.currency)] as [string, string]]
                 : []),
             ]} />
+          </section>
+
+          <section>
+            <SectionTitle>Job & placement</SectionTitle>
+            <PlacementTimeline employeeId={employee.id} canChange={can(P.EMPLOYEE_UPDATE) && employee.is_active}
+              onChanged={() => { void reload(); onChanged(); }} />
           </section>
 
           {employee.phone !== undefined && (

@@ -43,4 +43,6 @@ next-env.d.ts
 /playwright-report/
 /test-results-gps/
 /playwright-report-gps/
+/test-results-wl/
+/playwright-report-wl/
 /test-evidence/

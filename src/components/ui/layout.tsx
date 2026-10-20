@@ -199,7 +199,7 @@ export function Tabs({
   const id = useId();
   return (
     <RadixTabs.Root value={value} onValueChange={onValueChange}>
-      <RadixTabs.List className="scrollbar-thin mb-5 flex gap-1 overflow-x-auto rounded-2xl border border-border bg-surface p-1 shadow-sm sm:inline-flex">
+      <RadixTabs.List className="scrollbar-thin mb-5 flex max-w-full gap-1 overflow-x-auto rounded-2xl border border-border bg-surface p-1 shadow-sm sm:inline-flex">
         {tabs.map((tab) => (
           <RadixTabs.Trigger
             key={tab.value}
@@ -377,7 +377,7 @@ export function LiveClock({ className }: { className?: string }) {
   }, []);
   if (!now) return <span className={className}>&nbsp;</span>;
   return (
-    <span className={cn("tabular-nums", className)}>
+    <span className={cn("tabular-nums", className)} dir="ltr">
       {now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
     </span>
   );

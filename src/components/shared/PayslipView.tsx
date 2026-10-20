@@ -13,7 +13,8 @@ import type { Payslip } from "@/lib/types";
  * Payslip rendered with React (escaped by default). Printing uses the
  * browser's print of this element instead of writing raw HTML strings.
  */
-export function PayslipView({ slip, currency = "INR", companyName }: { slip: Payslip; currency?: string; companyName?: string }) {
+export function PayslipView({ slip, currency: fallbackCurrency = "INR", companyName }: { slip: Payslip; currency?: string; companyName?: string }) {
+  const currency = slip.currency ?? fallbackCurrency;
   const print = () => {
     document.body.classList.add("printing-payslip");
     window.print();
@@ -24,7 +25,7 @@ export function PayslipView({ slip, currency = "INR", companyName }: { slip: Pay
       <div id="payslip" className="rounded-2xl border border-border bg-surface p-6">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary">{companyName ?? "Payslip"}</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary">{slip.employer?.legal_name ?? companyName ?? "Payslip"}</p>
             <h3 className="mt-1 text-xl font-semibold">{slip.salary_month}</h3>
           </div>
           <StatusBadge status={slip.status} />

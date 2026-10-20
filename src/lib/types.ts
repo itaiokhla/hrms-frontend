@@ -30,6 +30,8 @@ export interface Me {
   permissions: Partial<Record<PermissionCode, Scope[]>>;
   is_company_admin: boolean;
   registry_version: string;
+  /** Version of the company's published brand; differs from the page's when a new brand was published. */
+  brand_version?: string;
 }
 
 export interface Page<T> {
@@ -78,6 +80,8 @@ export interface Department {
   is_active: boolean;
   head_employee_id: number | null;
   head_name: string | null;
+  /** Teams are child departments. */
+  parent_department_id?: number | null;
   employee_count: number;
 }
 
@@ -401,6 +405,9 @@ export interface PayrollRecord {
   total_deductions: number;
   net_salary: number;
   status: "draft" | "approved" | "processed";
+  /** ISO 4217 currency of every amount on the row (the employee's legal entity). */
+  currency?: string;
+  legal_entity_id?: number | null;
   created_by_user_id: number | null;
   approved_by_user_id: number | null;
   created_at: string;
@@ -409,10 +416,14 @@ export interface PayrollRecord {
 export interface PayrollSummary {
   month: string;
   total_employees: number;
-  total_gross_salary: number;
-  total_deductions: number;
-  total_net_salary: number;
-  average_salary: number;
+  /** Null when rows are in several currencies: unlike currencies are never added together. */
+  currency?: string | null;
+  mixed_currency?: boolean;
+  total_gross_salary: number | null;
+  total_deductions: number | null;
+  total_net_salary: number | null;
+  average_salary: number | null;
+  by_currency?: Record<string, { employees: number; gross: number; deductions: number; net: number }>;
   status_breakdown: Record<string, number>;
 }
 
@@ -427,6 +438,14 @@ export interface Payslip {
   net_salary: number;
   attendance: Record<string, number>;
   status: string;
+  currency?: string;
+  employer?: {
+    legal_name: string;
+    code: string;
+    country_code: string;
+    address: Record<string, string>;
+    registration_lines: { label: string; value: string }[];
+  } | null;
 }
 
 export interface SalaryStructure {

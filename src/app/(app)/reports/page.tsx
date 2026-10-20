@@ -28,8 +28,11 @@ type AttendanceRow = {
   lunch_seconds: number; net_seconds: number | null; hours_complete: boolean; hours_provisional: boolean;
 };
 type LeaveRow = { employee_id: number; employee_name: string; leave_type: string; start_date: string; end_date: string; days: number; status: string };
-type PayrollRow = { employee_id: number; employee_name: string; salary_month: string; gross_salary: number; total_deductions: number; net_salary: number; status: string };
-type DeptRow = { department_id: number; department_name: string; total_employees: number; attendance: { present: number; absent: number; late: number }; payroll?: { total_salary: number } };
+type PayrollRow = { employee_id: number; employee_name: string; salary_month: string; gross_salary: number; total_deductions: number; net_salary: number; status: string; currency?: string };
+type DeptRow = {
+  department_id: number; department_name: string; total_employees: number; attendance: { present: number; absent: number; late: number };
+  payroll?: { total_salary: number | null; currency?: string | null; by_currency?: Record<string, number> };
+};
 
 export default function ReportsPage() {
   return (
@@ -200,7 +203,9 @@ function DepartmentReport() {
             { key: "h", header: "Headcount", cell: (d) => d.total_employees },
             { key: "p", header: "Present", cell: (d) => d.attendance.present },
             { key: "l", header: "Late", cell: (d) => d.attendance.late, hideOnMobile: true },
-            ...(data?.payroll_visible ? [{ key: "pay", header: "Net payroll", cell: (d: DeptRow) => fmtMoney(d.payroll?.total_salary ?? 0, me?.company.currency) }] : []),
+            ...(data?.payroll_visible ? [{ key: "pay", header: "Net payroll", cell: (d: DeptRow) => d.payroll?.by_currency
+              ? Object.entries(d.payroll.by_currency).map(([code, v]) => fmtMoney(v, code)).join(" · ")
+              : fmtMoney(d.payroll?.total_salary ?? 0, d.payroll?.currency ?? me?.company.currency) }] : []),
           ]} />
       </Card>
     </div>
@@ -213,7 +218,7 @@ function PayrollReport() {
   const [month, setMonth] = useState<number | "">("");
   const currency = me?.company.currency ?? "INR";
   const { data, loading } = useApi(
-    () => api.get<Report<PayrollRow, { total_gross: number; total_deductions: number; total_net: number; average_salary: number }>>("/reports/payroll", { params: { year, month: month || undefined } }),
+    () => api.get<Report<PayrollRow, Record<string, number>> & { currency?: string | null; currencies?: string[] }>("/reports/payroll", { params: { year, month: month || undefined } }),
     [year, month],
   );
   return (
@@ -229,12 +234,18 @@ function PayrollReport() {
         <div className="flex-1" />
         {can(me, P.PAYROLL_EXPORT) && can(me, P.REPORT_EXPORT) && <ExportButtons base="/reports/payroll" params={{ year, month: month || undefined }} />}
       </Card>
-      {data && (
+      {data && (data.currencies?.length ?? 0) > 1 ? (
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <StatCard label="Gross" value={data.summary.total_gross} format={(n) => fmtMoney(n, currency)} />
-          <StatCard label="Deductions" value={data.summary.total_deductions} format={(n) => fmtMoney(n, currency)} tone="warning" delay={0.05} />
-          <StatCard label="Net" value={data.summary.total_net} format={(n) => fmtMoney(n, currency)} tone="success" delay={0.1} />
-          <StatCard label="Average net" value={data.summary.average_salary} format={(n) => fmtMoney(n, currency)} tone="info" delay={0.15} />
+          {data.currencies!.map((code, i) => (
+            <StatCard key={code} label={`Net (${code})`} value={data.summary[`total_net_${code}`] ?? 0} format={(n) => fmtMoney(n, code)} tone="success" delay={0.05 * i} />
+          ))}
+        </div>
+      ) : data && (
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <StatCard label="Gross" value={data.summary.total_gross} format={(n) => fmtMoney(n, data.currency ?? currency)} />
+          <StatCard label="Deductions" value={data.summary.total_deductions} format={(n) => fmtMoney(n, data.currency ?? currency)} tone="warning" delay={0.05} />
+          <StatCard label="Net" value={data.summary.total_net} format={(n) => fmtMoney(n, data.currency ?? currency)} tone="success" delay={0.1} />
+          <StatCard label="Average net" value={data.summary.average_salary} format={(n) => fmtMoney(n, data.currency ?? currency)} tone="info" delay={0.15} />
         </div>
       )}
       <Card>
@@ -243,8 +254,8 @@ function PayrollReport() {
           columns={[
             { key: "e", header: "Employee", cell: (r) => <span className="font-medium">{r.employee_name}</span> },
             { key: "m", header: "Month", cell: (r) => fmtDate(r.salary_month, "MMM yyyy") },
-            { key: "g", header: "Gross", cell: (r) => fmtMoney(r.gross_salary, currency), hideOnMobile: true },
-            { key: "n", header: "Net", cell: (r) => fmtMoney(r.net_salary, currency) },
+            { key: "g", header: "Gross", cell: (r) => fmtMoney(r.gross_salary, r.currency ?? currency), hideOnMobile: true },
+            { key: "n", header: "Net", cell: (r) => fmtMoney(r.net_salary, r.currency ?? currency) },
             { key: "s", header: "Status", cell: (r) => <StatusBadge status={r.status} /> },
           ]} />
       </Card>
