@@ -79,6 +79,27 @@ Positions come from Chrome's geolocation emulation, so these runs verify the sof
 accuracy. Under automation Chrome keeps background tabs visible and un-throttled; real hidden-tab
 throttling must be checked on a real device.
 
+### White label and multi-company suite (`e2e-wl/`)
+
+Three branded companies plus a reseller, each in its own Chrome profile on its own host
+(`*.hrms.localhost`, which Chrome resolves to this machine, and the custom domain
+`people.betagulf.localhost`): first-paint branding, isolation and cross-tenant probes, draft →
+preview → publish → rollback with byte-identical payslip reprints, roles and entity/branch scopes,
+custom-domain handoff, branded emails, payslip PDFs checked with PyMuPDF, phone/dark/RTL, the
+platform console and kill switch, organisation screens, MFA and password reset.
+
+```bash
+# hrms-backend: env from .local-secrets/wl-stack.env plus PROXY_SHARED_SECRET and DOMAIN_DNS_FIXTURE_FILE
+python scripts/demo_stack.py --fresh --data-dir .local-postgres-wl --port 8200
+python scripts/seed_white_label_e2e.py --api http://localhost:8200/api/v1 --dns-file logs/wl-dns.json
+# hrms-frontend (same PROXY_SHARED_SECRET):
+NEXT_DIST_DIR=.next-wl BACKEND_URL=http://localhost:8200 PLATFORM_HOSTS=localhost,127.0.0.1 npx next build
+NEXT_DIST_DIR=.next-wl BACKEND_URL=http://localhost:8200 PLATFORM_HOSTS=localhost,127.0.0.1 npx next start -p 3200
+npx playwright test -c playwright.wl.config.ts
+```
+DNS records come from a local fixture and TLS is simulated: these runs verify the software, not
+real DNS, certificates or email delivery. Evidence is written to `test-evidence/` (git-ignored).
+
 ## Routes
 
 | Area | Routes |
