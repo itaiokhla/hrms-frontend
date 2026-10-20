@@ -61,6 +61,24 @@ development emails with codes and invitation links are read from; default
 `../hrms-backend/logs/demo-backend.log`). The webcam is a fake device streaming
 `e2e/fixtures/face-stream.mjpeg` (public-domain photo, see `e2e/fixtures/README.md`).
 
+### Attendance, lunch and location suite (`e2e-gps/`)
+
+Three synthetic companies (Alpha, Beta, Gamma) on an isolated stack, in installed Google Chrome:
+face-verified punches with location, lunch, the 2-minute *test-only* tracking schedule through route
+changes, a second website, a frozen tab (Chrome's Page Lifecycle freeze) and same-tab navigation away,
+two HRMS tabs, exceptions and manager review, offline retry, role revocation mid-shift, and
+cross-company / cross-team probes with database assertions.
+
+```bash
+# hrms-backend: isolated stack + fixtures (see the backend README)
+NEXT_DIST_DIR=.next-e2e BACKEND_URL=http://localhost:8100 npx next build
+NEXT_DIST_DIR=.next-e2e npx next start -p 3100
+npx playwright test -c playwright.gps.config.ts       # E2E_HEADLESS=1 for headless
+```
+Positions come from Chrome's geolocation emulation, so these runs verify the software, not real GPS
+accuracy. Under automation Chrome keeps background tabs visible and un-throttled; real hidden-tab
+throttling must be checked on a real device.
+
 ## Routes
 
 | Area | Routes |

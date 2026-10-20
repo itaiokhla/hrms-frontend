@@ -21,24 +21,24 @@ test("Face enrolment, face-verified self check-in and the shared kiosk", async (
   });
 
   const divya = await openAs(browser, testInfo, "Divya (webcam check-in)", NIMBUS.divya);
-  await step(divya.page, "Divya checks in: Nimbus requires a face match, so the camera opens", async () => {
+  await step(divya.page, "Divya punches in: Nimbus requires a face match, so the camera opens", async () => {
     await divya.page.goto("/attendance");
-    await divya.page.getByRole("button", { name: "Check in" }).click();
+    await divya.page.getByRole("button", { name: "Punch in" }).click();
     const camera = divya.page.getByRole("dialog", { name: "Verify it's you" });
     await cameraReady(divya.page);
-    await camera.getByRole("button", { name: /Capture & check in/ }).click();
-    await toast(divya.page, "Checked in. Have a great day!");
+    await camera.getByRole("button", { name: /Capture & punch in/ }).click();
+    await toast(divya.page, "Punched in. Have a great day!");
     await expect(divya.page.getByText(/Working since/)).toBeVisible();
   });
 
   const rahul = await openAs(browser, testInfo, "Rahul (not enrolled)", NIMBUS.rahul);
   await step(rahul.page, "Rahul tries the same face on his account: refused, his face isn't enrolled", async () => {
     await rahul.page.goto("/attendance");
-    await rahul.page.getByRole("button", { name: "Check in" }).click();
+    await rahul.page.getByRole("button", { name: "Punch in" }).click();
     const camera = rahul.page.getByRole("dialog", { name: "Verify it's you" });
     await cameraReady(rahul.page);
-    await camera.getByRole("button", { name: /Capture & check in/ }).click();
-    await toast(rahul.page, "Your face is not enrolled yet. Ask HR to register it.");
+    await camera.getByRole("button", { name: /Capture & punch in/ }).click();
+    await expect(camera.getByRole("alert")).toHaveText("Your face is not enrolled yet. Ask HR to register it.");
   });
   await step(rahul.page, "Rahul cannot check in on Divya's behalf by sending her id either", async () => {
     const divyaId = (await api<{ employee: { id: number } }>(divya.page, "GET", "/auth/me")).data.employee.id;
@@ -65,12 +65,12 @@ test("Face enrolment, face-verified self check-in and the shared kiosk", async (
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
-test("Button check-in where a company doesn't require faces, and late marking by shift", async ({ page }) => {
+test("One-click punch-in where a company doesn't require faces, and late marking by shift", async ({ page }) => {
   await login(page, SAFFRON.ramesh);
-  await step(page, "Ramesh (Saffron, morning shift) checks in with one click", async () => {
+  await step(page, "Ramesh (Saffron, morning shift) punches in with one click", async () => {
     await page.goto("/attendance");
-    await page.getByRole("button", { name: "Check in" }).click();
-    await toast(page, "Checked in. Have a great day!");
+    await page.getByRole("button", { name: "Punch in" }).click();
+    await toast(page, "Punched in. Have a great day!");
   });
   await step(page, "His history shows today; arriving after 06:10 is marked late", async () => {
     const today = await api<{ state: string; record: { status: string; source: string; check_in_time: string } }>(

@@ -142,7 +142,9 @@ function DashboardContent() {
                             <p>In {fmtTime(r.check_in_time)}</p>
                             <p>{r.check_out_time ? `Out ${fmtTime(r.check_out_time)}` : fmtDuration(r.working_seconds)}</p>
                           </div>
-                          <StatusBadge status={r.check_out_time ? "completed" : "working"} />
+                          {r.attendance_state === "ON_LUNCH"
+                            ? <StatusBadge status="on_lunch" label="On lunch" />
+                            : <StatusBadge status={r.check_out_time ? "completed" : "working"} />}
                         </motion.li>
                       ))}
                     </ul>
@@ -242,17 +244,17 @@ function MySummary({ data, currency, compact }: { data: DashboardData; currency:
       <div className="bg-gradient-to-br from-primary to-accent p-5 text-primary-foreground">
         <p className="text-sm opacity-90">My day</p>
         <p className="mt-1 font-display text-2xl font-semibold">
-          {mine.attendance.state === "not_checked_in" ? "Not checked in" : mine.attendance.state === "working" ? "Working" : "Day complete"}
+          {{ NOT_PUNCHED_IN: "Not punched in", WORKING: "Working", ON_LUNCH: "On lunch", PUNCHED_OUT: "Day complete" }[mine.attendance.attendance_state]}
         </p>
         {record && (
           <p className="mt-1 text-sm opacity-90">
             In {fmtTime(record.check_in_time)}
-            {record.check_out_time ? ` · Out ${fmtTime(record.check_out_time)}` : ` · ${fmtDuration(record.working_seconds)} so far`}
+            {record.check_out_time ? ` · Out ${fmtTime(record.check_out_time)} · ${fmtDuration(record.working_seconds)} worked` : ` · ${fmtDuration(record.working_seconds)} worked so far`}
           </p>
         )}
         <Link href="/attendance">
           <Button size="sm" variant="secondary" className="mt-4 border-white/30 bg-white/15 text-white hover:bg-white/25">
-            <CalendarCheck2 className="h-4 w-4" /> {mine.attendance.state === "not_checked_in" ? "Check in" : "Open attendance"}
+            <CalendarCheck2 className="h-4 w-4" /> {mine.attendance.attendance_state === "NOT_PUNCHED_IN" ? "Punch in" : "Open attendance"}
           </Button>
         </Link>
       </div>
