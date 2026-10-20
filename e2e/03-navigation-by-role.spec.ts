@@ -7,12 +7,19 @@ const PERSONAS: { who: string; email: string; roles: string; menu: string[] }[] 
   { who: "Arjun", email: NIMBUS.lead, roles: "Employee + custom Team Lead", menu: [...SELF_SERVICE, "Employees", "Organization", "Reports"] },
   { who: "Sneha", email: NIMBUS.manager, roles: "Manager", menu: [...SELF_SERVICE, "Employees", "Organization", "Reports"] },
   { who: "Karan", email: NIMBUS.payroll, roles: "Payroll Manager", menu: [...SELF_SERVICE, "Employees", "Organization", "Payroll", "Reports"] },
-  { who: "Vikram", email: NIMBUS.hr, roles: "HR Administrator", menu: [...SELF_SERVICE, "Employees", "Organization", "Face kiosk", "Reports", "Users", "Roles & access", "Audit log"] },
+  {
+    who: "Vikram", email: NIMBUS.hr, roles: "HR Administrator",
+    // Email templates and branches only; for this role the branding page shows just its Email tab.
+    menu: [...SELF_SERVICE, "Employees", "Organization", "Face kiosk", "Reports", "Users", "Roles & access", "Audit log", "Branding & domains", "Legal entities & branches"],
+  },
   { who: "Neha", email: NIMBUS.auditor, roles: "Auditor + Employee", menu: [...SELF_SERVICE, "Employees", "Organization", "Reports", "Users", "Roles & access", "Audit log"] },
   { who: "Pooja", email: NIMBUS.recruiter, roles: "custom Recruiter", menu: [...SELF_SERVICE, "Employees", "Organization", "Users", "Roles & access"] },
   {
     who: "Ananya", email: NIMBUS.admin, roles: "Company Administrator",
-    menu: [...SELF_SERVICE, "Employees", "Organization", "Payroll", "Face kiosk", "Reports", "Users", "Roles & access", "Audit log", "Company settings"],
+    menu: [
+      ...SELF_SERVICE, "Employees", "Organization", "Payroll", "Face kiosk", "Reports", "Users", "Roles & access", "Audit log", "Company settings",
+      "Branding & domains", "Legal entities & branches",
+    ],
   },
 ];
 

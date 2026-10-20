@@ -9,6 +9,7 @@ import { Suspense, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 
+import { useBrand } from "@/components/brand/BrandProvider";
 import { AuthShell, FormAlert } from "@/components/layout/AuthShell";
 import { Button } from "@/components/ui/button";
 import { Field, Input } from "@/components/ui/field";
@@ -22,7 +23,22 @@ const schema = z.object({
 });
 type FormData = z.infer<typeof schema>;
 
-type LoginResponse = { mfa_required: true; mfa_token: string } | { mfa_required: false; me: Me };
+type LoginResponse =
+  | { mfa_required: true; mfa_token: string }
+  | { mfa_required: false; me: Me; handoff_url?: undefined }
+  | { mfa_required: false; handoff_url: string; me?: undefined };
+
+/** The tenant enforces its own domain: continue there with a one-time code (never a session token). */
+function followHandoff(url: string): boolean {
+  try {
+    const target = new URL(url);
+    if (!["http:", "https:"].includes(target.protocol) || !target.pathname.startsWith("/auth/handoff")) return false;
+    window.location.assign(target.toString());
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 function safeNext(next: string | null) {
   return next && next.startsWith("/") && !next.startsWith("//") && !next.startsWith("/login") ? next : "/dashboard";
@@ -31,6 +47,7 @@ function safeNext(next: string | null) {
 function LoginForm() {
   const router = useRouter();
   const params = useSearchParams();
+  const { brand } = useBrand();
   const setMe = useSession((s) => s.setMe);
   const [error, setError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
@@ -50,7 +67,8 @@ function LoginForm() {
     try {
       const result = await api.post<LoginResponse>("/auth/login", data);
       if (result.mfa_required) setMfaToken(result.mfa_token);
-      else finish(result.me);
+      else if (result.handoff_url) followHandoff(result.handoff_url);
+      else if (result.me) finish(result.me);
     } catch (e) {
       setError(errorMessage(e));
     } finally {
@@ -62,8 +80,9 @@ function LoginForm() {
     setError(null);
     setBusy(true);
     try {
-      const result = await api.post<{ me: Me }>("/auth/login/mfa", { mfa_token: mfaToken, code });
-      finish(result.me);
+      const result = await api.post<{ me?: Me; handoff_url?: string }>("/auth/login/mfa", { mfa_token: mfaToken, code });
+      if (result.handoff_url) followHandoff(result.handoff_url);
+      else if (result.me) finish(result.me);
     } catch (e) {
       setError(errorMessage(e));
     } finally {
@@ -74,7 +93,13 @@ function LoginForm() {
   return (
     <AuthShell
       title={mfaToken ? "Two-step verification" : "Welcome back"}
-      subtitle={mfaToken ? "Enter the 6-digit code from your authenticator app." : "Sign in with your work email. We'll take you to your company's workspace."}
+      subtitle={
+        mfaToken
+          ? "Enter the 6-digit code from your authenticator app."
+          : brand.login_scope === "TENANT"
+            ? `Sign in to ${brand.display_name} with your work email.`
+            : "Sign in with your work email. We'll take you to your company's workspace."
+      }
     >
       {params.get("expired") && !error && <FormAlert tone="info">Your session ended. Please sign in again.</FormAlert>}
       {params.get("reset") && !error && <FormAlert tone="success">Password updated. Sign in with your new password.</FormAlert>}
@@ -136,12 +161,14 @@ function LoginForm() {
           </motion.div>
         )}
       </AnimatePresence>
-      <p className="mt-8 text-center text-sm text-muted-foreground">
-        New to Intertech HRMS?{" "}
-        <Link href="/signup" className="font-medium text-primary hover:underline">
-          Create your company workspace
-        </Link>
-      </p>
+      {brand.login_scope === "ANY" && (
+        <p className="mt-8 text-center text-sm text-muted-foreground">
+          New to {brand.product_name}?{" "}
+          <Link href="/signup" className="font-medium text-primary hover:underline">
+            Create your company workspace
+          </Link>
+        </p>
+      )}
     </AuthShell>
   );
 }

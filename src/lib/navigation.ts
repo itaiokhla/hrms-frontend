@@ -8,6 +8,8 @@ import {
   LayoutDashboard,
   Network,
   BadgeIndianRupee,
+  Building,
+  Palette,
   ScanFace,
   Settings2,
   ShieldCheck,
@@ -96,6 +98,18 @@ export const NAV: NavGroup[] = [
       { label: "Roles & access", href: "/roles", icon: ShieldCheck, visible: (me) => can(me, P.ROLE_READ) },
       { label: "Audit log", href: "/audit-logs", icon: ClipboardList, visible: (me) => can(me, P.AUDIT_READ) },
       { label: "Company settings", href: "/settings", icon: Settings2, visible: (me) => can(me, P.SETTINGS_MANAGE) },
+      {
+        label: "Branding & domains",
+        href: "/settings/branding",
+        icon: Palette,
+        visible: (me) => canAny(me, [P.BRANDING_MANAGE, P.DOMAIN_MANAGE, P.EMAIL_TEMPLATE_MANAGE]),
+      },
+      {
+        label: "Legal entities & branches",
+        href: "/settings/organization",
+        icon: Building,
+        visible: (me) => canAny(me, [P.ORG_READ, P.ORG_MANAGE_ENTITIES, P.ORG_MANAGE_BRANCHES]),
+      },
     ],
   },
 ];

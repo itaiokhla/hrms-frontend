@@ -136,9 +136,18 @@ function Runs() {
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <StatCard label="Employees paid" value={summary.total_employees} icon={<Users />} />
-          <StatCard label="Gross" value={summary.total_gross_salary} format={(n) => fmtMoney(n, currency)} icon={<BadgeIndianRupee />} tone="info" delay={0.05} />
-          <StatCard label="Deductions" value={summary.total_deductions} format={(n) => fmtMoney(n, currency)} icon={<FileText />} tone="warning" delay={0.1} />
-          <StatCard label="Net payout" value={summary.total_net_salary} format={(n) => fmtMoney(n, currency)} icon={<Wallet />} tone="success" delay={0.15} />
+          {summary.mixed_currency && summary.by_currency ? (
+            Object.entries(summary.by_currency).map(([code, b], i) => (
+              <StatCard key={code} label={`Net payout (${code}) · ${b.employees}`} value={b.net} format={(n) => fmtMoney(n, code)}
+                icon={<Wallet />} tone="success" delay={0.05 * (i + 1)} />
+            ))
+          ) : (
+            <>
+              <StatCard label="Gross" value={summary.total_gross_salary ?? 0} format={(n) => fmtMoney(n, summary.currency ?? currency)} icon={<BadgeIndianRupee />} tone="info" delay={0.05} />
+              <StatCard label="Deductions" value={summary.total_deductions ?? 0} format={(n) => fmtMoney(n, summary.currency ?? currency)} icon={<FileText />} tone="warning" delay={0.1} />
+              <StatCard label="Net payout" value={summary.total_net_salary ?? 0} format={(n) => fmtMoney(n, summary.currency ?? currency)} icon={<Wallet />} tone="success" delay={0.15} />
+            </>
+          )}
         </div>
       )}
 
@@ -147,9 +156,9 @@ function Runs() {
           empty={<EmptyState icon={<BadgeIndianRupee />} title="No payroll for this month" description="Generate drafts once salary structures are in place." />}
           columns={[
             { key: "emp", header: "Employee", cell: (p) => <div className="flex items-center gap-2.5"><Avatar name={p.employee_name} size={30} /><div><p className="font-medium">{p.employee_name}</p><p className="font-mono text-xs text-muted-foreground">{p.employee_code}</p></div></div> },
-            { key: "gross", header: "Gross", cell: (p) => fmtMoney(p.gross_salary, currency), hideOnMobile: true },
-            { key: "ded", header: "Deductions", cell: (p) => fmtMoney(p.total_deductions, currency), hideOnMobile: true },
-            { key: "net", header: "Net", cell: (p) => <span className="font-semibold">{fmtMoney(p.net_salary, currency)}</span> },
+            { key: "gross", header: "Gross", cell: (p) => fmtMoney(p.gross_salary, p.currency ?? currency), hideOnMobile: true },
+            { key: "ded", header: "Deductions", cell: (p) => fmtMoney(p.total_deductions, p.currency ?? currency), hideOnMobile: true },
+            { key: "net", header: "Net", cell: (p) => <span className="font-semibold">{fmtMoney(p.net_salary, p.currency ?? currency)}</span> },
             { key: "status", header: "Status", cell: (p) => <StatusBadge status={p.status} /> },
             { key: "actions", header: "", className: "text-right", cell: (p) => (
               <div className="flex justify-end gap-1">
