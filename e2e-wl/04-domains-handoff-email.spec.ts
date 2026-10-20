@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 
-import { HOSTS, db, evidencePath, expect, openTenant, secrets, shot, signIn, test } from "./support";
+import { HOSTS, api, db, evidencePath, expect, openTenant, secrets, shot, signIn, test } from "./support";
 
 /**
  * Beta's custom domain (verified through the DNS fixture, TLS simulated): domain status UI,
@@ -19,6 +19,10 @@ test("domain status, enforced handoff, replay refused, redirect to the primary a
   const admin = await openTenant(browser, testInfo, "beta-domain-admin", HOSTS.beta);
   try {
     await signIn(admin.page, B.admin, S.password);
+    // Start from a known state (a previous interrupted run may have left the rules on).
+    const domains = (await api(admin.page, "GET", "/domains")).data.domains as { id: number; hostname: string }[];
+    const customId = domains.find((d) => d.hostname === "people.betagulf.localhost")!.id;
+    expect((await api(admin.page, "PATCH", `/domains/${customId}`, { enforce_custom_domain: false, redirect_to_primary: false })).status).toBe(200);
     await admin.page.goto("/settings/branding?tab=domains");
     const custom = admin.page.locator('[data-domain="people.betagulf.localhost"]');
     await expect(custom.locator('[data-status="ACTIVE"]')).toBeVisible();
@@ -46,8 +50,12 @@ test("domain status, enforced handoff, replay refused, redirect to the primary a
     // A Beta user signs in on the platform address and lands on Beta's domain.
     const traveller = await openTenant(browser, testInfo, "beta-handoff", HOSTS.platform, { userAgent: UA });
     let handoffUrl = "";
-    traveller.page.on("response", async (r) => {
-      if (r.url().endsWith("/api/v1/auth/login") && r.status() === 200) handoffUrl = (await r.json()).handoff_url ?? "";
+    // Read the sign-in response before the page navigates away (the browser then drops its body).
+    await traveller.page.route("**/api/v1/auth/login", async (route) => {
+      const response = await route.fetch();
+      const body = await response.json();
+      handoffUrl = body.handoff_url ?? "";
+      await route.fulfill({ response, json: body });
     });
     await traveller.page.goto("/login");
     await traveller.page.locator("#email").fill(B.people.hr.email);
@@ -104,7 +112,7 @@ test("branded invitation email uses Beta's verified domain; email wording is san
       const res = await fetch("/api/v1/users/invite", {
         method: "POST", credentials: "include",
         headers: { "Content-Type": "application/json", "X-CSRF-Token": csrf },
-        body: JSON.stringify({ email: "new.joiner@beta-gulf.example", full_name: "New Joiner", role_ids: [] }),
+        body: JSON.stringify({ email: `new.joiner.${Date.now()}@beta-gulf.example`, full_name: "New Joiner", role_ids: [] }),
       });
       return res.json();
     });
@@ -121,8 +129,14 @@ test("branded invitation email uses Beta's verified domain; email wording is san
     expect(html).not.toContain("Powered by"); // hidden and locked by the partner
     for (const other of ["Alpha", "Gamma"]) expect(html).not.toContain(other);
     fs.copyFileSync(path.join(OUTBOX, htmlFile), evidencePath("04-beta-invitation-email.html"));
-    await admin.page.goto(`file://${evidencePath("04-beta-invitation-email.html").replace(/\\/g, "/")}`);
-    await shot(admin.page, testInfo, "04-beta-invitation-email");
+    // Render the email inside Beta's origin so its logo (served from Beta's domain) loads.
+    const viewer = await openTenant(browser, testInfo, "beta-email-viewer", HOSTS.beta);
+    await viewer.page.goto("/manifest.webmanifest");
+    await viewer.page.setContent(html, { waitUntil: "load" });
+    await viewer.page.waitForFunction(() => [...document.images].every((i) => i.complete && i.naturalWidth > 0));
+    expect(await viewer.page.evaluate(() => document.images.length)).toBeGreaterThan(0);
+    await shot(viewer.page, testInfo, "04-beta-invitation-email");
+    await viewer.close();
 
     // The invitation link opens Beta's branded acceptance page on the custom domain.
     const joiner = await openTenant(browser, testInfo, "beta-joiner", HOSTS.beta);

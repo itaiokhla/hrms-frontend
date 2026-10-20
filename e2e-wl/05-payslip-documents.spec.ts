@@ -13,9 +13,9 @@ const CASES: { key: "alpha" | "beta" | "gamma"; host: string; person: string; em
   { key: "alpha", host: HOSTS.alpha, person: "employee", employer: "Alpha Technologies India Private Limited",
     expects: ["₹", "CIN: U72200KA2019PTC123456", "Alpha Technologies India Private Limited · CIN U72200KA2019PTC123456"], currency: "INR" },
   { key: "beta", host: HOSTS.beta, person: "employee", employer: "Beta Gulf Trading LLC",
-    // Shaped Arabic is extracted as presentation forms, so the name is checked as Arabic script
-    // here and visually in the rendered page image.
-    expects: ["AED 9,500.00", "Trade licence: DED-778899", /[؀-ۿﭐ-﷿ﹰ-﻾]{3}/], currency: "AED" },
+    // Shaped Arabic is extracted as contextual presentation forms (U+FE70-U+FEFE); isolated, unshaped
+    // letters would not be. The name is also checked visually in the rendered page image.
+    expects: ["AED 9,500.00", "Trade licence: DED-778899", /[\uFE70-\uFEFE]{3}/], currency: "AED" },
   { key: "gamma", host: HOSTS.gamma, person: "employee", employer: "Gamma Health Systems Inc.",
     expects: ["$6,200.00", "EIN: 12-3456789"], currency: "USD" },
 ];

@@ -44,10 +44,11 @@ test("Gamma in dark mode and Alpha on a phone; keyboard reaches the sign-in form
 
     await alpha.page.goto("/login");
     await shot(alpha.page, testInfo, "06-alpha-phone-login");
-    await alpha.page.locator("body").click();
+    // Keyboard only, from the top of the page.
+    await alpha.page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
     await alpha.page.keyboard.press("Tab");
     let reached = false;
-    for (let i = 0; i < 6 && !reached; i++) {
+    for (let i = 0; i < 10 && !reached; i++) {
       reached = await alpha.page.evaluate(() => document.activeElement?.id === "email");
       if (!reached) await alpha.page.keyboard.press("Tab");
     }
