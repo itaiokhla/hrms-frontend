@@ -100,6 +100,21 @@ npx playwright test -c playwright.wl.config.ts
 DNS records come from a local fixture and TLS is simulated: these runs verify the software, not
 real DNS, certificates or email delivery. Evidence is written to `test-evidence/` (git-ignored).
 
+### Three-company SaaS audit suite (`e2e-saas/`)
+
+Alpha Technologies (India), Beta Logistics (UAE) and Gamma Solutions (USA) plus two partners,
+seeded by `hrms-backend/scripts/seed_saas_three_companies.py` on an isolated stack (API 8300,
+frontend 3300, `.next-saas`; see `hrms-backend/docs/saas/C-three-company-seed.md`): brands at first
+paint, cross-company attacks from each administrator's browser with every response recorded, role
+and hierarchy scopes, organisation screens, brand publish and rollback, the existing modules per
+company, browser states (deep links, tabs, expiry, revocation, bad networks, phone and tablet), the
+platform console and the partner console.
+
+```bash
+npx playwright test -c playwright.saas.config.ts      # E2E_HEADLESS=1 for headless
+```
+Evidence goes to `test-evidence/2026-10-20-saas/`. Re-seed before each full run.
+
 ## Routes
 
 | Area | Routes |
@@ -109,6 +124,7 @@ real DNS, certificates or email delivery. Evidence is written to `test-evidence/
 | People | `/employees`, `/organization` (org chart, secondary lines, delegations) |
 | Operations | `/payroll`, `/kiosk`, `/reports` |
 | Administration | `/users`, `/roles`, `/audit-logs`, `/settings` |
-| Platform operators | `/platform/login`, `/platform` (tenants & subscriptions only) |
+| Platform operators | `/platform/login`, `/platform` (tenants, partners, platform brand; no HR data) |
+| Partner administrators | `/partner/login`, `/partner` (own clients as counts, own brand; no HR data) |
 
 Links from the previous single-tenant app (e.g. `/auth/login`, `/employee/*`) redirect to the new routes.
