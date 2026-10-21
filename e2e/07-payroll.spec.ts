@@ -13,7 +13,7 @@ interface Row {
 test("Managers never see payroll, whatever their seniority", async ({ page }) => {
   await login(page, NIMBUS.vp);
   await step(page, "Rohan (VP, 7 people below him) opens Payroll: access denied", async () => {
-    await page.goto("/payroll");
+    await page.goto("/payroll/legacy");
     await expect(page.getByText("You don't have access to this page")).toBeVisible();
     expect((await api(page, "GET", "/payroll")).status).toBe(403);
     expect((await api(page, "GET", "/reports/payroll?year=2026")).status).toBe(403);
@@ -23,7 +23,7 @@ test("Managers never see payroll, whatever their seniority", async ({ page }) =>
 test("Prepare → approve → pay with separation of duties, then the payslip", async ({ page, browser }, testInfo) => {
   const karan = await openAs(browser, testInfo, "Karan (payroll analyst)", NIMBUS.payroll);
   await step(karan.page, `Karan prepares payroll for ${MONTH} ${YEAR}`, async () => {
-    await karan.page.goto("/payroll");
+    await karan.page.goto("/payroll/legacy");
     await karan.page.getByLabel("Month").selectOption({ label: MONTH });
     await karan.page.getByLabel("Year").fill(String(YEAR));
     await karan.page.getByRole("button", { name: "Generate month" }).click();
@@ -44,7 +44,7 @@ test("Prepare → approve → pay with separation of duties, then the payslip", 
 
   const priya = await openAs(browser, testInfo, "Priya (finance controller)", NIMBUS.finance);
   await step(priya.page, "Priya approves Divya's pay", async () => {
-    await priya.page.goto("/payroll");
+    await priya.page.goto("/payroll/legacy");
     await priya.page.getByRole("row", { name: /Divya Menon/ }).getByRole("button", { name: "Approve" }).click();
     await toast(priya.page, "Payroll approved");
     await expect(priya.page.getByRole("row", { name: /Divya Menon/ })).toContainText("Approved");
@@ -86,7 +86,7 @@ test("Prepare → approve → pay with separation of duties, then the payslip", 
 test("Salary revisions keep history; another company's payroll is invisible", async ({ page }) => {
   await login(page, NIMBUS.finance);
   await step(page, "Priya records a salary revision for Divya from next month", async () => {
-    await page.goto("/payroll?tab=structures");
+    await page.goto("/payroll/legacy?tab=structures");
     await page.getByRole("button", { name: "New revision" }).click();
     const dialog = page.getByRole("dialog", { name: "New salary revision" });
     await dialog.getByLabel("Employee").click();
@@ -110,7 +110,7 @@ test("Salary revisions keep history; another company's payroll is invisible", as
   await page.context().clearCookies();
   await login(page, SAFFRON.accounts);
   await step(page, "Saffron's accounts manager sees none of Nimbus's payroll", async () => {
-    await page.goto("/payroll");
+    await page.goto("/payroll/legacy");
     await expect(page.getByText("No payroll for this month")).toBeVisible();
     const sept = await api<{ total: number }>(page, "GET", "/payroll?year=2026&month=9");
     expect(sept.data.total).toBe(0);

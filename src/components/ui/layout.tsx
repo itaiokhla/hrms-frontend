@@ -1,16 +1,16 @@
 "use client";
 
 import * as RadixTabs from "@radix-ui/react-tabs";
-import { motion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 import { ChevronLeft, ChevronRight, Inbox, Lock, Search } from "lucide-react";
-import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import CountUp from "react-countup";
 
 import { cn } from "@/lib/cn";
 
 import { Button } from "./button";
 import { Input } from "./field";
-import { Card, Skeleton } from "./primitives";
+import { Card, MotionSafe, Skeleton } from "./primitives";
 
 export function PageHeader({
   title,
@@ -24,6 +24,7 @@ export function PageHeader({
   eyebrow?: ReactNode;
 }) {
   return (
+    <MotionSafe>
     <motion.div
       initial={{ opacity: 0, y: -6 }}
       animate={{ opacity: 1, y: 0 }}
@@ -37,6 +38,7 @@ export function PageHeader({
       </div>
       {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
     </motion.div>
+    </MotionSafe>
   );
 }
 
@@ -65,7 +67,11 @@ export function StatCard({
     info: "bg-info-soft text-info",
     accent: "bg-accent/10 text-accent",
   };
+  // CountUp animates with requestAnimationFrame, which the CSS reduced-motion override can't stop,
+  // so with prefers-reduced-motion it shows the final value at once.
+  const reduceMotion = useReducedMotion();
   return (
+    <MotionSafe>
     <motion.div
       initial={{ opacity: 0, y: 14 }}
       animate={{ opacity: 1, y: 0 }}
@@ -77,7 +83,9 @@ export function StatCard({
           <div>
             <p className="text-sm font-medium text-muted-foreground">{label}</p>
             <p className="mt-2 font-display text-3xl font-semibold tabular-nums">
-              <CountUp end={value} duration={1.1} preserveValue formattingFn={format} />
+              {/* Duration 0 jumps straight to the value and keeps server and client markup identical. */}
+              <CountUp end={value} duration={reduceMotion ? 0 : 1.1} preserveValue formattingFn={format} />
+
             </p>
             {hint && <p className="mt-1 text-xs text-muted-foreground">{hint}</p>}
           </div>
@@ -94,6 +102,7 @@ export function StatCard({
         </div>
       </Card>
     </motion.div>
+    </MotionSafe>
   );
 }
 
@@ -111,6 +120,7 @@ export function EmptyState({
   className?: string;
 }) {
   return (
+    <MotionSafe>
     <motion.div
       initial={{ opacity: 0, scale: 0.98 }}
       animate={{ opacity: 1, scale: 1 }}
@@ -123,6 +133,7 @@ export function EmptyState({
       {description && <p className="mt-1 max-w-sm text-sm text-muted-foreground">{description}</p>}
       {action && <div className="mt-5">{action}</div>}
     </motion.div>
+    </MotionSafe>
   );
 }
 
@@ -198,6 +209,7 @@ export function Tabs({
 }) {
   const id = useId();
   return (
+    <MotionSafe>
     <RadixTabs.Root value={value} onValueChange={onValueChange}>
       <RadixTabs.List className="scrollbar-thin mb-5 flex max-w-full gap-1 overflow-x-auto rounded-2xl border border-border bg-surface p-1 shadow-sm sm:inline-flex">
         {tabs.map((tab) => (
@@ -224,15 +236,18 @@ export function Tabs({
       </RadixTabs.List>
       {children}
     </RadixTabs.Root>
+    </MotionSafe>
   );
 }
 
 export const TabPanel = ({ value, children }: { value: string; children: ReactNode }) => (
-  <RadixTabs.Content value={value} asChild>
-    <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25 }}>
-      {children}
-    </motion.div>
-  </RadixTabs.Content>
+  <MotionSafe>
+    <RadixTabs.Content value={value} asChild>
+      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25 }}>
+        {children}
+      </motion.div>
+    </RadixTabs.Content>
+  </MotionSafe>
 );
 
 /* ---------------------------------------------------------------- Table */
@@ -242,6 +257,10 @@ export interface Column<T> {
   cell: (row: T) => ReactNode;
   className?: string;
   hideOnMobile?: boolean;
+  /** Card mode: this column is the card's title (the first column when none is marked). */
+  primary?: boolean;
+  /** Card mode: leave this column out of the card. */
+  hideInCard?: boolean;
 }
 
 export function DataTable<T>({
@@ -251,6 +270,9 @@ export function DataTable<T>({
   rowKey,
   onRowClick,
   empty,
+  cardBelowMd,
+  stickyHeader,
+  caption,
 }: {
   columns: Column<T>[];
   rows: T[] | undefined;
@@ -258,6 +280,12 @@ export function DataTable<T>({
   rowKey: (row: T) => string | number;
   onRowClick?: (row: T) => void;
   empty?: ReactNode;
+  /** Opt-in: below the md breakpoint each row renders as a card of label/value pairs (3.8 §10). */
+  cardBelowMd?: boolean;
+  /** Keep the header row visible while the page (or a height-limited parent) scrolls. */
+  stickyHeader?: boolean;
+  /** Accessible table name (visually hidden). */
+  caption?: string;
 }) {
   if (loading && !rows?.length) {
     return (
@@ -269,13 +297,30 @@ export function DataTable<T>({
     );
   }
   if (!rows?.length) return <>{empty ?? <EmptyState title="Nothing here yet" />}</>;
-  return (
-    <div className="scrollbar-thin overflow-x-auto">
+  // Enter activates a clickable row; in card mode Space does too. Keys pressed on a button or
+  // link inside the row stay with that control.
+  const activate = (row: T) => (e: KeyboardEvent<HTMLElement>) => {
+    if (e.target !== e.currentTarget || !onRowClick) return;
+    if (e.key === "Enter" || (cardBelowMd && e.key === " ")) {
+      e.preventDefault();
+      onRowClick(row);
+    }
+  };
+  const table = (
+    <div
+      className={cn(
+        "scrollbar-thin",
+        // A horizontally scrolling wrapper would trap a sticky header, so it only scrolls below md.
+        stickyHeader ? "overflow-x-auto md:overflow-x-visible" : "overflow-x-auto",
+        cardBelowMd && "hidden md:block",
+      )}
+    >
       <table className="w-full text-sm">
-        <thead>
+        {caption && <caption className="sr-only">{caption}</caption>}
+        <thead className={cn(stickyHeader && "sticky top-0 z-10 bg-surface/95 backdrop-blur")}>
           <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
             {columns.map((c) => (
-              <th key={c.key} className={cn("whitespace-nowrap px-4 py-3 font-medium", c.hideOnMobile && "hidden md:table-cell", c.className)}>
+              <th key={c.key} scope="col" className={cn("whitespace-nowrap px-4 py-3 font-medium", c.hideOnMobile && "hidden md:table-cell", c.className)}>
                 {c.header}
               </th>
             ))}
@@ -289,7 +334,7 @@ export function DataTable<T>({
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.25, delay: Math.min(index, 12) * 0.025 }}
               onClick={onRowClick ? () => onRowClick(row) : undefined}
-              onKeyDown={onRowClick ? (e) => e.key === "Enter" && onRowClick(row) : undefined}
+              onKeyDown={onRowClick ? activate(row) : undefined}
               tabIndex={onRowClick ? 0 : undefined}
               className={cn(
                 "border-b border-border/60 last:border-0",
@@ -306,6 +351,44 @@ export function DataTable<T>({
         </tbody>
       </table>
     </div>
+  );
+  if (!cardBelowMd) return <MotionSafe>{table}</MotionSafe>;
+  const titleColumn = columns.find((c) => c.primary) ?? columns[0];
+  const detailColumns = columns.filter((c) => c !== titleColumn && !c.hideInCard);
+  return (
+    <MotionSafe>
+      {table}
+      <ul className="divide-y divide-border/60 md:hidden" aria-label={caption}>
+        {rows.map((row, index) => (
+          <motion.li
+            key={rowKey(row)}
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.25, delay: Math.min(index, 12) * 0.025 }}
+            onClick={onRowClick ? () => onRowClick(row) : undefined}
+            onKeyDown={onRowClick ? activate(row) : undefined}
+            tabIndex={onRowClick ? 0 : undefined}
+            data-testid="datatable-card"
+            className={cn(
+              "min-h-[44px] px-4 py-3 text-sm",
+              onRowClick && "cursor-pointer transition-colors hover:bg-surface-muted focus:bg-surface-muted focus:outline-none",
+            )}
+          >
+            <div className="font-medium">{titleColumn.cell(row)}</div>
+            {detailColumns.length > 0 && (
+              <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5">
+                {detailColumns.map((c) => (
+                  <div key={c.key} className="contents">
+                    <dt className="text-xs text-muted-foreground">{c.header}</dt>
+                    <dd className="min-w-0 text-end">{c.cell(row)}</dd>
+                  </div>
+                ))}
+              </dl>
+            )}
+          </motion.li>
+        ))}
+      </ul>
+    </MotionSafe>
   );
 }
 
@@ -346,6 +429,7 @@ export function Pagination({
 /** Animates children in sequence on mount. */
 export function Stagger({ children, className }: { children: ReactNode; className?: string }) {
   return (
+    <MotionSafe>
     <motion.div
       className={className}
       initial="hidden"
@@ -354,6 +438,7 @@ export function Stagger({ children, className }: { children: ReactNode; classNam
     >
       {children}
     </motion.div>
+    </MotionSafe>
   );
 }
 

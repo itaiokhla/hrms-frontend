@@ -45,6 +45,10 @@ const nextConfig: NextConfig = {
       { source: "/face-recognition", destination: "/kiosk", permanent: true },
       { source: "/salary-structure", destination: "/payroll?tab=structures", permanent: true },
       { source: "/dashboard/audit-logs", destination: "/audit-logs", permanent: true },
+      // The legacy payroll screens moved to /payroll/legacy (decision I-11); old tab links follow them.
+      // Query values (?tab=…) are passed through to the destination.
+      { source: "/payroll", has: [{ type: "query", key: "tab" }], destination: "/payroll/legacy", permanent: false },
+      { source: "/settings/payroll", destination: "/settings/payroll/general", permanent: false },
     ];
   },
   async headers() {

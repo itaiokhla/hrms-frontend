@@ -1,9 +1,10 @@
 "use client";
 
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import {
   Bell,
   CheckCheck,
+  ChevronDown,
   CreditCard,
   LogOut,
   Menu as MenuIcon,
@@ -16,7 +17,7 @@ import {
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useId, useMemo, useState, type ReactNode } from "react";
 
 import { LocationTracker } from "@/components/attendance/LocationTracker";
 import { BrandMark, BrandWordmark } from "@/components/brand/BrandLogo";
@@ -29,7 +30,7 @@ import { api, onSessionEvent } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import { fromNow } from "@/lib/format";
 import type { Brand } from "@/lib/brand";
-import { navFor } from "@/lib/navigation";
+import { navFor, navHrefs, type NavItem } from "@/lib/navigation";
 import type { AppNotification } from "@/lib/types";
 import { useSession } from "@/store/session";
 
@@ -154,8 +155,7 @@ function Sidebar({ onClose }: { onClose?: () => void }) {
   const groups = useMemo(() => navFor(me), [me]);
   const surface = brand.sidebar_style === "LIGHT" ? "light" : "dark";
   // The most specific matching entry is active (/settings/branding is not also "Company settings").
-  const activeHref = groups
-    .flatMap((g) => g.items.map((i) => i.href))
+  const activeHref = navHrefs(groups)
     .filter((href) => pathname === href || pathname.startsWith(`${href}/`))
     .sort((x, y) => y.length - x.length)[0];
   const hasLogo = !!(brand.logos.light || brand.logos.dark);
@@ -187,33 +187,15 @@ function Sidebar({ onClose }: { onClose?: () => void }) {
           <div key={group.label}>
             <p className="mb-1.5 px-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-sidebar-muted">{group.label}</p>
             <ul className="space-y-0.5">
-              {group.items.map((item) => {
-                const active = item.href === activeHref;
-                return (
+              {group.items.map((item) =>
+                item.children?.length ? (
+                  <NavGroupEntry key={item.href} item={item} activeHref={activeHref} />
+                ) : (
                   <li key={item.href}>
-                    <Link
-                      href={item.href}
-                      aria-current={active ? "page" : undefined}
-                      className={cn(
-                        "group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors",
-                        active
-                          ? "text-sidebar-active-foreground"
-                          : "text-sidebar-foreground/80 hover:bg-sidebar-foreground/10 hover:text-sidebar-foreground",
-                      )}
-                    >
-                      {active && (
-                        <motion.span
-                          layoutId="nav-active"
-                          className="absolute inset-0 rounded-xl bg-sidebar-active shadow-glow"
-                          transition={{ type: "spring", stiffness: 420, damping: 36 }}
-                        />
-                      )}
-                      <item.icon className="relative h-[18px] w-[18px] shrink-0 transition-transform group-hover:scale-110" />
-                      <span className="relative">{item.label}</span>
-                    </Link>
+                    <NavLink item={item} active={item.href === activeHref} />
                   </li>
-                );
-              })}
+                ),
+              )}
             </ul>
           </div>
         ))}
@@ -228,6 +210,91 @@ function Sidebar({ onClose }: { onClose?: () => void }) {
         </div>
       </div>
     </div>
+  );
+}
+
+function NavLink({ item, active, nested = false }: { item: NavItem; active: boolean; nested?: boolean }) {
+  return (
+    <Link
+      href={item.href}
+      aria-current={active ? "page" : undefined}
+      className={cn(
+        "group relative flex min-w-0 flex-1 items-center gap-3 rounded-xl px-3 text-sm font-medium transition-colors",
+        nested ? "py-2" : "py-2.5",
+        active
+          ? "text-sidebar-active-foreground"
+          : "text-sidebar-foreground/80 hover:bg-sidebar-foreground/10 hover:text-sidebar-foreground",
+      )}
+    >
+      {active && (
+        <motion.span
+          layoutId="nav-active"
+          className="absolute inset-0 rounded-xl bg-sidebar-active shadow-glow"
+          transition={{ type: "spring", stiffness: 420, damping: 36 }}
+        />
+      )}
+      <item.icon
+        className={cn("relative shrink-0 transition-transform group-hover:scale-110", nested ? "h-4 w-4" : "h-[18px] w-[18px]")}
+      />
+      <span className="relative truncate">{item.label}</span>
+    </Link>
+  );
+}
+
+/**
+ * A menu entry with sub-pages: the entry itself stays a link, and a separate disclosure button
+ * shows or hides its sub-pages (open by default while one of them is the current page).
+ */
+function NavGroupEntry({ item, activeHref }: { item: NavItem; activeHref: string | undefined }) {
+  const children = item.children ?? [];
+  const childActive = children.some((c) => c.href === activeHref);
+  const [open, setOpen] = useState(childActive);
+  const reduceMotion = useReducedMotion();
+  const listId = useId();
+  useEffect(() => {
+    if (childActive) setOpen(true);
+  }, [childActive]);
+  // While collapsed, the entry carries the highlight for its active sub-page; while open, the sub-page does.
+  const selfActive = open ? item.href === activeHref && !childActive : item.href === activeHref || childActive;
+  return (
+    <li>
+      <div className="flex items-center gap-1">
+        <NavLink item={item} active={selfActive} />
+        <button
+          type="button"
+          onClick={() => setOpen((o) => !o)}
+          aria-expanded={open}
+          aria-controls={listId}
+          aria-label={`${open ? "Hide" : "Show"} ${item.label} pages`}
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-sidebar-muted transition-colors hover:bg-sidebar-foreground/10 hover:text-sidebar-foreground"
+        >
+          <ChevronDown
+            className={cn("h-4 w-4 transition-transform duration-200 motion-reduce:transition-none", open && "rotate-180")}
+            aria-hidden
+          />
+        </button>
+      </div>
+      <AnimatePresence initial={false}>
+        {open && (
+          <motion.ul
+            id={listId}
+            key="children"
+            aria-label={item.label}
+            className="ms-5 space-y-0.5 overflow-hidden border-s border-sidebar-foreground/10 ps-2"
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: reduceMotion ? 0 : 0.22, ease: [0.22, 1, 0.36, 1] }}
+          >
+            {children.map((child) => (
+              <li key={child.href} className="pt-0.5 first:pt-1">
+                <NavLink item={child} nested active={child.href === activeHref} />
+              </li>
+            ))}
+          </motion.ul>
+        )}
+      </AnimatePresence>
+    </li>
   );
 }
 

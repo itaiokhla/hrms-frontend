@@ -67,7 +67,7 @@ test("Alpha: department manager, team lead, employee, HR and finance each see th
   await hr.close();
 
   const finance = await as(browser, testInfo, A, "finance");
-  await finance.page.goto("/payroll");
+  await finance.page.goto("/payroll/legacy");
   await expect(finance.page.getByText("₹").first()).toBeVisible();
   await shot(finance.page, testInfo, "03-alpha-finance-payroll");
   expect((await api(finance.page, "GET", "/users")).status).toBe(403);

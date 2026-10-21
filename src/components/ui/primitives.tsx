@@ -1,7 +1,7 @@
 "use client";
 
 import { cva, type VariantProps } from "class-variance-authority";
-import { motion, type HTMLMotionProps } from "framer-motion";
+import { MotionConfig, motion, type HTMLMotionProps } from "framer-motion";
 import { useEffect, useState, type HTMLAttributes, type ReactNode } from "react";
 
 import { cn } from "@/lib/cn";
@@ -11,15 +11,22 @@ export function Card({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
   return <div className={cn("rounded-2xl border border-border/80 bg-surface shadow-card", className)} {...props} />;
 }
 
+/** Respects prefers-reduced-motion: transforms are skipped and only opacity animates. */
+export function MotionSafe({ children }: { children: ReactNode }) {
+  return <MotionConfig reducedMotion="user">{children}</MotionConfig>;
+}
+
 export function MotionCard({ className, ...props }: HTMLMotionProps<"div">) {
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
-      className={cn("rounded-2xl border border-border/80 bg-surface shadow-card", className)}
-      {...props}
-    />
+    <MotionSafe>
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+        className={cn("rounded-2xl border border-border/80 bg-surface shadow-card", className)}
+        {...props}
+      />
+    </MotionSafe>
   );
 }
 

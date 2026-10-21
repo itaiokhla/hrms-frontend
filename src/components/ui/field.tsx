@@ -53,15 +53,26 @@ interface FieldProps {
   children: ReactNode;
 }
 
+type ControlProps = { id?: string; "aria-describedby"?: string; "aria-invalid"?: unknown };
+
 export function Field({ label, htmlFor, error, hint, required, className, children }: FieldProps) {
   const autoId = useId();
+  const messageId = `${autoId}-msg`;
+  // The error (or else the hint) describes the control, so screen readers read it with the field.
+  const describedBy = error || hint ? messageId : undefined;
   // Link the label to its control even when no explicit id was given, so
   // every field has an accessible name (and can be found by its label).
   let controlId = htmlFor;
   let control = children;
-  if (!controlId && isValidElement<{ id?: string }>(children) && children.type !== "div") {
-    controlId = children.props.id ?? autoId;
-    control = cloneElement(children, { id: controlId });
+  if (isValidElement<ControlProps>(children) && children.type !== "div") {
+    const extra: ControlProps = {};
+    if (!controlId) {
+      controlId = children.props.id ?? autoId;
+      extra.id = controlId;
+    }
+    if (describedBy) extra["aria-describedby"] = [children.props["aria-describedby"], describedBy].filter(Boolean).join(" ");
+    if (error && children.props["aria-invalid"] === undefined) extra["aria-invalid"] = true;
+    control = cloneElement(children, extra);
   }
   return (
     <div className={cn("space-y-1.5", className)}>
@@ -71,11 +82,13 @@ export function Field({ label, htmlFor, error, hint, required, className, childr
       </label>
       {control}
       {error ? (
-        <p role="alert" className="text-xs font-medium text-danger">
+        <p id={messageId} role="alert" className="text-xs font-medium text-danger">
           {error}
         </p>
       ) : hint ? (
-        <p className="text-xs text-muted-foreground">{hint}</p>
+        <p id={messageId} className="text-xs text-muted-foreground">
+          {hint}
+        </p>
       ) : null}
     </div>
   );
@@ -86,15 +99,22 @@ interface SwitchProps {
   onChange: (value: boolean) => void;
   label?: string;
   disabled?: boolean;
+  /** Lets `Field htmlFor` or a visible label target the switch. */
+  id?: string;
+  "aria-describedby"?: string;
+  "aria-labelledby"?: string;
 }
 
-export function Switch({ checked, onChange, label, disabled }: SwitchProps) {
+export function Switch({ checked, onChange, label, disabled, id, ...aria }: SwitchProps) {
   return (
     <button
       type="button"
       role="switch"
+      id={id}
       aria-checked={checked}
-      aria-label={label}
+      aria-label={aria["aria-labelledby"] ? undefined : label}
+      aria-describedby={aria["aria-describedby"]}
+      aria-labelledby={aria["aria-labelledby"]}
       disabled={disabled}
       onClick={() => onChange(!checked)}
       className={cn(
@@ -102,10 +122,11 @@ export function Switch({ checked, onChange, label, disabled }: SwitchProps) {
         checked ? "bg-primary" : "bg-muted-foreground/30",
       )}
     >
+      {/* The knob starts at the inline start and travels toward the inline end, mirrored in RTL. */}
       <span
         className={cn(
           "inline-block h-5 w-5 rounded-full bg-white shadow-md transition-transform duration-300 ease-[cubic-bezier(.34,1.56,.64,1)]",
-          checked ? "translate-x-[22px]" : "translate-x-0.5",
+          checked ? "translate-x-[22px] rtl:-translate-x-[22px]" : "translate-x-0.5 rtl:-translate-x-0.5",
         )}
       />
     </button>

@@ -2,7 +2,7 @@
 
 import * as Dialog from "@radix-ui/react-dialog";
 import * as Menu from "@radix-ui/react-dropdown-menu";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, MotionConfig, motion } from "framer-motion";
 import { X } from "lucide-react";
 import { createContext, useCallback, useContext, useState, type ReactNode } from "react";
 
@@ -24,6 +24,8 @@ const SIZES = { sm: "max-w-md", md: "max-w-lg", lg: "max-w-2xl", xl: "max-w-4xl"
 
 export function Modal({ open, onOpenChange, title, description, children, footer, size = "md" }: ModalProps) {
   return (
+    // reducedMotion="user": with prefers-reduced-motion, transforms are skipped and only opacity fades.
+    <MotionConfig reducedMotion="user">
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <AnimatePresence>
         {open && (
@@ -70,6 +72,7 @@ export function Modal({ open, onOpenChange, title, description, children, footer
         )}
       </AnimatePresence>
     </Dialog.Root>
+    </MotionConfig>
   );
 }
 
@@ -82,7 +85,11 @@ export function Sheet({
   footer,
   width = "max-w-xl",
 }: Omit<ModalProps, "size"> & { width?: string }) {
+  // Slides in from the inline end: the right in LTR, the left in RTL.
+  const rtl = typeof document !== "undefined" && document.documentElement.dir === "rtl";
+  const offscreen = rtl ? "-100%" : "100%";
   return (
+    <MotionConfig reducedMotion="user">
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <AnimatePresence>
         {open && (
@@ -97,10 +104,10 @@ export function Sheet({
             </Dialog.Overlay>
             <Dialog.Content asChild forceMount>
               <motion.aside
-                className={cn("fixed inset-y-0 right-0 z-50 flex w-full flex-col border-l border-border bg-surface shadow-lift", width)}
-                initial={{ x: "100%" }}
+                className={cn("fixed inset-y-0 end-0 z-50 flex w-full flex-col border-s border-border bg-surface shadow-lift", width)}
+                initial={{ x: offscreen }}
                 animate={{ x: 0 }}
-                exit={{ x: "100%" }}
+                exit={{ x: offscreen }}
                 transition={{ type: "spring", stiffness: 320, damping: 34 }}
               >
                 <div className="flex items-start justify-between gap-4 border-b border-border px-6 py-5">
@@ -126,6 +133,7 @@ export function Sheet({
         )}
       </AnimatePresence>
     </Dialog.Root>
+    </MotionConfig>
   );
 }
 

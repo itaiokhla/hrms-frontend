@@ -1,5 +1,7 @@
 import { format, formatDistanceToNowStrict, parseISO } from "date-fns";
 
+import { formatMoney, minorUnit } from "./money";
+
 export function fmtDate(value?: string | null, pattern = "d MMM yyyy") {
   if (!value) return "—";
   try {
@@ -26,13 +28,28 @@ export function fromNow(value?: string | null) {
   }
 }
 
-export function fmtMoney(value: number | null | undefined, currency = "INR") {
-  if (value === null || value === undefined) return "—";
-  return new Intl.NumberFormat(currency === "INR" ? "en-IN" : "en-US", {
-    style: "currency",
-    currency,
-    maximumFractionDigits: 0,
-  }).format(value);
+/**
+ * Legacy money display, now a thin wrapper over `formatMoney` (`@/lib/money`): exactly the
+ * currency's ISO minor-unit digits instead of whole units, so payslip lines add up to their totals.
+ *
+ * Legacy APIs still send numbers; they are converted with `toString()` for display only (never
+ * for arithmetic). Payroll v2 code must pass the API's decimal strings to `formatMoney` /
+ * `MoneyText` instead. The legacy locale choice (en-IN for INR, en-US otherwise) is kept so
+ * existing screens and their tests keep their grouping and symbols.
+ */
+export function fmtMoney(value: number | string | null | undefined, currency = "INR") {
+  if (value === null || value === undefined || value === "") return "—";
+  const locale = currency === "INR" ? "en-IN" : "en-US";
+  if (typeof value === "number") {
+    if (!Number.isFinite(value)) return "—";
+    const text = value.toString();
+    // Exponent notation (1e21, 5e-7) is not a decimal string; Intl handles those numbers directly.
+    if (/e/i.test(text)) {
+      return new Intl.NumberFormat(locale, { style: "currency", currency, minimumFractionDigits: minorUnit(currency) ?? 2, maximumFractionDigits: minorUnit(currency) ?? 2 }).format(value);
+    }
+    return formatMoney(text, currency, { locale });
+  }
+  return formatMoney(value, currency, { locale });
 }
 
 export function fmtDuration(seconds: number) {

@@ -93,7 +93,7 @@ test("Gamma: HR and finance are separate; finance sees USD payroll, HR does not"
 
     await signIn(finance.page, G.people.finance.email, S.password);
     expect(await sidebarLinks(finance.page)).toContain("Payroll");
-    await finance.page.goto("/payroll");
+    await finance.page.goto("/payroll/legacy");
     const month = new Date(S.payroll_month);
     await finance.page.locator("select").first().selectOption(String(month.getUTCMonth() + 1)).catch(() => undefined);
     const list = (await api(finance.page, "GET", `/payroll?year=${month.getUTCFullYear()}&month=${month.getUTCMonth() + 1}`)).data;

@@ -19,13 +19,16 @@
     --muted-foreground: 220 10% 44%;
     --accent: 186 72% 42%;
     --accent-foreground: 0 0% 100%;
-    --success: 152 62% 36%;
+    /* Status tones are platform constants (never brandable). Each tone as text on its -soft
+       background, as text on surface, and as a background under white text is at least 4.5:1
+       (WCAG 2.1 AA for 12 px badge text). */
+    --success: 152 68% 29%;
     --success-soft: 150 60% 94%;
-    --warning: 33 92% 46%;
+    --warning: 30 95% 32%;
     --warning-soft: 40 100% 93%;
-    --danger: 356 72% 52%;
+    --danger: 356 72% 45%;
     --danger-soft: 356 100% 96%;
-    --info: 210 90% 50%;
+    --info: 210 90% 40%;
     --info-soft: 210 100% 95%;
     --sidebar: 233 40% 12%;
     --sidebar-foreground: 228 30% 92%;
@@ -56,6 +59,7 @@
     --muted-foreground: 225 12% 64%;
     --accent: 186 70% 52%;
     --accent-foreground: 200 40% 8%;
+    /* Dark status tones: text on its -soft background and on surface is at least 4.5:1. */
     --success: 152 55% 48%;
     --success-soft: 152 40% 14%;
     --warning: 38 92% 58%;

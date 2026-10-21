@@ -128,7 +128,15 @@ export function toApiError(error: unknown): ApiError {
         : status >= 500
           ? "Something went wrong. Please try again."
           : "Request failed.";
-  return new ApiError(status, (data?.detail as string) || fallback, data?.code);
+  // Payroll endpoints send structured details ({message, ...}); never show "[object Object]".
+  const detail = data?.detail as unknown;
+  const message =
+    typeof detail === "string"
+      ? detail
+      : detail && typeof detail === "object" && typeof (detail as { message?: unknown }).message === "string"
+        ? (detail as { message: string }).message
+        : "";
+  return new ApiError(status, message || fallback, data?.code);
 }
 
 export const api = {
