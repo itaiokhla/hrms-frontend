@@ -26,6 +26,7 @@ const SHORT: Record<Scope, string> = {
   ASSIGNED_GROUP: "Assigned",
   LEGAL_ENTITY: "Entity",
   BRANCH: "Branch",
+  PAY_GROUP: "Pay group",
   COMPANY: "Company",
 };
 
