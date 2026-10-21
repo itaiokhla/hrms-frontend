@@ -7,6 +7,7 @@ import {
   CalendarRange,
   ClipboardCheck,
   ClipboardList,
+  Clock,
   FileClock,
   FileSpreadsheet,
   FileText,
@@ -233,6 +234,22 @@ export const NAV: NavGroup[] = [
         href: "/attendance",
         icon: CalendarCheck2,
         visible: (me) => canAny(me, [P.ATTENDANCE_MARK, P.ATTENDANCE_READ]),
+        // Nested (not top-level) so existing sidebar label lists stay unchanged; managers approve here
+        // without needing any payroll permission.
+        children: [
+          {
+            label: "Overtime",
+            href: "/overtime",
+            icon: Clock,
+            visible: (me) => canAny(me, [P.OVERTIME_REQUEST, P.OVERTIME_APPROVE]),
+          },
+          {
+            label: "Tasks",
+            href: "/tasks",
+            icon: ListChecks,
+            visible: (me) => canAny(me, [P.TASK_READ, P.TASK_MANAGE, P.TASK_APPROVE]),
+          },
+        ],
       },
       {
         label: "Leave",
