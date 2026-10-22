@@ -15,6 +15,7 @@ import { Card, Skeleton } from "@/components/ui/primitives";
 import { can } from "@/lib/access";
 import { ApiError } from "@/lib/api";
 import { cn } from "@/lib/cn";
+import { VOCABULARIES } from "@/lib/payroll/catalogues.generated";
 import { formatDecimalHours, type StatusTone } from "@/lib/payroll/labels";
 import { isConflict, type PayrollApiError } from "@/lib/payroll/api";
 import { P } from "@/lib/permissions.generated";
@@ -85,37 +86,15 @@ interface LocalStatus {
 }
 
 /**
- * Vocabularies the backend does not export to `catalogues.generated.ts` yet (overtime entries,
- * approval requests, wage-input imports, loan actions). Same look as `StatusChip`; unknown codes are
- * neutral, never success.
+ * Status vocabularies without a backend state machine (overtime entries, approval requests,
+ * wage-input imports, loan actions), generated into `catalogues.generated.ts` (F-22). Same look as
+ * `StatusChip`; unknown codes are neutral, never success.
  */
 export const LOCAL_VOCABULARIES: Record<string, Record<string, LocalStatus>> = {
-  overtime: {
-    PENDING_APPROVAL: { label: "Awaiting approval", tone: "warning", glossary: "Waiting for a manager's decision. Not paid yet." },
-    APPROVED: { label: "Approved", tone: "success", glossary: "Approved. Paid by the next pay run that includes this date." },
-    REJECTED: { label: "Rejected", tone: "danger", glossary: "Not paid." },
-    CANCELLED: { label: "Cancelled", tone: "neutral", glossary: "Withdrawn. Not paid." },
-    SUPERSEDED: { label: "Replaced", tone: "neutral", glossary: "A newer version of this entry replaced it." },
-  },
-  approval: {
-    PENDING: { label: "Pending", tone: "warning" },
-    APPROVED: { label: "Approved", tone: "success" },
-    REJECTED: { label: "Rejected", tone: "danger" },
-    CANCELLED: { label: "Cancelled", tone: "neutral" },
-  },
-  import: {
-    VALIDATED: { label: "Ready to import", tone: "info", glossary: "Every row passed the checks. Nothing is created until you import it." },
-    INVALID: { label: "Has errors", tone: "danger", glossary: "Fix the rows with errors and upload the file again." },
-    COMMITTING: { label: "Importing", tone: "primary", glossary: "The rows are being created." },
-    COMMITTED: { label: "Imported", tone: "success" },
-    FAILED: { label: "Failed", tone: "danger" },
-  },
-  loan_action: {
-    PENDING_APPROVAL: { label: "Awaiting approval", tone: "warning" },
-    APPLIED: { label: "Applied", tone: "success" },
-    REJECTED: { label: "Rejected", tone: "danger" },
-    CANCELLED: { label: "Cancelled", tone: "neutral" },
-  },
+  overtime: VOCABULARIES.overtime_entry.states,
+  approval: VOCABULARIES.approval_request.states,
+  import: VOCABULARIES.wage_input_import.states,
+  loan_action: VOCABULARIES.loan_action.states,
 };
 
 const TONE_CLASS: Record<StatusTone, string> = {

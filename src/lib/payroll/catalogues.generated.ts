@@ -231,7 +231,8 @@ export interface StatusEntry {
 }
 
 export interface Vocabulary {
-  /** Backend state machine name, or null for derived vocabularies (employee payment, job). */
+  /** Backend state machine name, or null for derived vocabularies (employee payment, job, approval
+   * request, overtime entry, wage-input import, loan action). */
   machine: string | null;
   initial: string[];
   /** Side states are shown as banners, not as a stage (e.g. CANCELLED runs). */
@@ -240,9 +241,43 @@ export interface Vocabulary {
   states: Record<string, StatusEntry>;
 }
 
-export type VocabularyName = "bank_account" | "batch" | "claim" | "compensation" | "document" | "employee_payment" | "instruction" | "invoice" | "job" | "loan" | "pack_version" | "pay_period" | "policy" | "policy_version" | "run" | "setting_value" | "statutory_report" | "task" | "verification" | "wage_input";
+export type VocabularyName = "approval_request" | "bank_account" | "batch" | "claim" | "compensation" | "document" | "employee_payment" | "instruction" | "invoice" | "job" | "loan" | "loan_action" | "overtime_entry" | "pack_version" | "pay_period" | "policy" | "policy_version" | "run" | "setting_value" | "statutory_report" | "task" | "verification" | "wage_input" | "wage_input_import";
 
 export const VOCABULARIES: Record<VocabularyName, Vocabulary> = {
+  "approval_request": {
+    "machine": null,
+    "initial": [
+      "PENDING"
+    ],
+    "side": [],
+    "terminal": [
+      "APPROVED",
+      "CANCELLED",
+      "REJECTED"
+    ],
+    "states": {
+      "APPROVED": {
+        "label": "Approved",
+        "tone": "success",
+        "glossary": "Every step of the approval chain approved it."
+      },
+      "CANCELLED": {
+        "label": "Cancelled",
+        "tone": "neutral",
+        "glossary": "The requester withdrew it. It has no effect."
+      },
+      "PENDING": {
+        "label": "Pending",
+        "tone": "warning",
+        "glossary": "Waiting for an approver's decision. Nothing takes effect until it is approved."
+      },
+      "REJECTED": {
+        "label": "Rejected",
+        "tone": "danger",
+        "glossary": "An approver rejected it. It has no effect."
+      }
+    }
+  },
   "bank_account": {
     "machine": "BANK_ACCOUNT",
     "initial": [
@@ -780,6 +815,79 @@ export const VOCABULARIES: Record<VocabularyName, Vocabulary> = {
       }
     }
   },
+  "loan_action": {
+    "machine": null,
+    "initial": [
+      "PENDING_APPROVAL"
+    ],
+    "side": [],
+    "terminal": [
+      "APPLIED",
+      "CANCELLED",
+      "REJECTED"
+    ],
+    "states": {
+      "APPLIED": {
+        "label": "Applied",
+        "tone": "success",
+        "glossary": "The change was approved and applied to the loan schedule."
+      },
+      "CANCELLED": {
+        "label": "Cancelled",
+        "tone": "neutral",
+        "glossary": "The request was withdrawn. The schedule is unchanged."
+      },
+      "PENDING_APPROVAL": {
+        "label": "Awaiting approval",
+        "tone": "warning",
+        "glossary": "The change to the loan waits for an approver. The schedule is unchanged."
+      },
+      "REJECTED": {
+        "label": "Rejected",
+        "tone": "danger",
+        "glossary": "An approver rejected the change. The schedule is unchanged."
+      }
+    }
+  },
+  "overtime_entry": {
+    "machine": null,
+    "initial": [
+      "PENDING_APPROVAL"
+    ],
+    "side": [],
+    "terminal": [
+      "CANCELLED",
+      "REJECTED",
+      "SUPERSEDED"
+    ],
+    "states": {
+      "APPROVED": {
+        "label": "Approved",
+        "tone": "success",
+        "glossary": "Approved. Paid by the next pay run that includes this date."
+      },
+      "CANCELLED": {
+        "label": "Cancelled",
+        "tone": "neutral",
+        "glossary": "Withdrawn. Not paid."
+      },
+      "PENDING_APPROVAL": {
+        "label": "Awaiting approval",
+        "tone": "warning",
+        "glossary": "Waiting for a manager's decision. Not paid yet."
+      },
+      "REJECTED": {
+        "label": "Rejected",
+        "tone": "danger",
+        "glossary": "Not paid."
+      },
+      "SUPERSEDED": {
+        "label": "Replaced",
+        "tone": "neutral",
+        "glossary": "A newer version of this entry replaced it."
+      }
+    }
+  },
   "pack_version": {
     "machine": "PACK_VERSION",
     "initial": [
@@ -1229,6 +1337,46 @@ export const VOCABULARIES: Record<VocabularyName, Vocabulary> = {
         "label": "Rejected",
         "tone": "danger",
         "glossary": "Rejected. Payroll will not use it."
+      }
+    }
+  },
+  "wage_input_import": {
+    "machine": null,
+    "initial": [
+      "INVALID",
+      "VALIDATED"
+    ],
+    "side": [],
+    "terminal": [
+      "COMMITTED",
+      "FAILED",
+      "INVALID"
+    ],
+    "states": {
+      "COMMITTED": {
+        "label": "Imported",
+        "tone": "success",
+        "glossary": "The rows were created as wage inputs."
+      },
+      "COMMITTING": {
+        "label": "Importing",
+        "tone": "primary",
+        "glossary": "The rows are being created."
+      },
+      "FAILED": {
+        "label": "Failed",
+        "tone": "danger",
+        "glossary": "The import stopped and created nothing. Upload the file again."
+      },
+      "INVALID": {
+        "label": "Has errors",
+        "tone": "danger",
+        "glossary": "Fix the rows with errors and upload the file again."
+      },
+      "VALIDATED": {
+        "label": "Ready to import",
+        "tone": "info",
+        "glossary": "Every row passed the checks. Nothing is created until you import it."
       }
     }
   }

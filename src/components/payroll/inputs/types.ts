@@ -365,7 +365,10 @@ export interface Task {
   quantity: string | null;
   accepted_quantity: string | null;
   unit: string;
+  /** Null for viewers without payroll:inputs:read or payroll:configuration:read (contract §25, F-42). */
   rate: Money | null;
+  /** True when the backend withheld the rate from this viewer. */
+  pay_hidden?: boolean;
   due_date: string | null;
   completed_on: string | null;
   status: string;
