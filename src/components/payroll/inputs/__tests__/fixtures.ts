@@ -7,7 +7,7 @@ import { type PermissionCode, type Scope } from "@/lib/permissions.generated";
 import type { Me } from "@/lib/types";
 import { useSession } from "@/store/session";
 
-import type { ApprovalRequest, Claim, Loan, OvertimeEntry, Task, WageInput } from "../types";
+import type { ApprovalRequest, ArrearsProposal, Claim, Loan, OvertimeEntry, Task, WageInput } from "../types";
 
 export function me(permissions: Partial<Record<PermissionCode, Scope[]>>, employeeId: number | null = null): Me {
   return {
@@ -238,4 +238,62 @@ export function task(overrides: Partial<Task> = {}): Task {
     approval: { status: "PENDING", current_step: 1, pending_reason: null },
     ...overrides,
   };
+}
+
+/** An arrears proposal as services/retro.py `proposal_json` returns it (lines only on the detail GET). */
+export function arrearsProposal(overrides: Partial<ArrearsProposal> = {}, withLines = true): ArrearsProposal {
+  const base: ArrearsProposal = {
+    id: 5,
+    employee_id: 142,
+    legal_entity_id: 1,
+    pay_group_id: 3,
+    original_run_id: 12,
+    original_run_employee_id: 340,
+    original_period: { id: 9, start: "2026-08-01", end: "2026-08-31" },
+    currency: "INR",
+    trigger: "COMPENSATION",
+    trigger_ref: { type: "compensation_assignment", id: 77 },
+    changed_sources: ["segments", "components"],
+    base_proposal_id: null,
+    superseded_by_id: null,
+    totals: {
+      arrears: { amount: "4500.50", currency: "INR" },
+      recovery: { amount: "-1200.00", currency: "INR" },
+      net_change: { amount: "3300.50", currency: "INR" },
+    },
+    issues: [],
+    status: "PENDING_APPROVAL",
+    payment_mode: "NEXT_REGULAR_RUN",
+    recovery_mode: "NEXT_RUN",
+    retro_run_id: null,
+    approval_request_id: 81,
+    reason: "Back-dated increment from 1 Aug",
+    decision_note: null,
+    engine_version: "1.0.0",
+    calc_hash: "a".repeat(64),
+    created_at: "2026-10-20T10:00:00",
+    decided_at: null,
+    settled_at: null,
+    row_version: 3,
+  };
+  const lines = withLines
+    ? {
+        lines: [
+          {
+            id: 51, component_code: "BASIC", kind: "EARNING", category: null, tags: [], direction: "ARREARS",
+            original: { amount: "30000.00", currency: "INR" }, recalculated: { amount: "34500.50", currency: "INR" },
+            delta: { amount: "4500.50", currency: "INR" }, period_ref: { start: "2026-08-01", end: "2026-08-31" },
+            explanation: "Basic went up from 1 Aug 2026.", instalments: [],
+          },
+          {
+            id: 52, component_code: "PF_EE", kind: "DEDUCTION", category: null, tags: [], direction: "RECOVERY",
+            original: { amount: "-3600.00", currency: "INR" }, recalculated: { amount: "-4800.00", currency: "INR" },
+            delta: { amount: "-1200.00", currency: "INR" }, period_ref: { start: "2026-08-01", end: "2026-08-31" },
+            explanation: null, instalments: [],
+          },
+        ],
+        outstanding: { amount: "0.00", currency: "INR" },
+      }
+    : {};
+  return { ...base, ...lines, ...overrides };
 }

@@ -1,14 +1,14 @@
 "use client";
 
-import { AlertTriangle, CheckCircle2, Circle, CircleDot, FlaskConical, Info, RefreshCw, SearchX, ShieldAlert, XCircle } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Circle, CircleDot, FlaskConical, Info, SearchX, ShieldAlert, XCircle } from "lucide-react";
 import Link from "next/link";
-import { Suspense, type ReactNode } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { flushSync } from "react-dom";
 
 import { useCan } from "@/components/access/Can";
 import { Hint } from "@/components/payroll/Hint";
 import { HideAmountsToggle } from "@/components/payroll/MoneyText";
 import { StepUpProvider } from "@/components/payroll/StepUpAuthModal";
-import { Button } from "@/components/ui/button";
 import { Field, Input, Select } from "@/components/ui/field";
 import { EmptyState, ErrorState, PageHeader } from "@/components/ui/layout";
 import { Card, Skeleton } from "@/components/ui/primitives";
@@ -76,6 +76,34 @@ export function WorkspaceHeader({
   );
 }
 
+/* ------------------------------------------------------------------ unsaved changes in routed modals (F-26) */
+
+/**
+ * Dirty flags for the modal routes a page owns: pass `dirty.of("remit")` to `useModalRoute` and
+ * `dirty.set("remit")` to the modal, so closing a half-filled form asks "Discard changes?" first.
+ */
+export function useDirtyFlags() {
+  const [flags, setFlags] = useState<Record<string, boolean>>({});
+  const set = useCallback((key: string) => (d: boolean) => setFlags((f) => (!!f[key] === d ? f : { ...f, [key]: d })), []);
+  return { of: (key: string) => !!flags[key], set };
+}
+
+/** Report a modal form's dirty state to the page that owns its route (only when it changes). */
+export function useReportDirty(dirty: boolean, onDirtyChange?: (dirty: boolean) => void) {
+  const callback = useRef(onDirtyChange);
+  callback.current = onDirtyChange;
+  useEffect(() => {
+    callback.current?.(dirty);
+  }, [dirty]);
+  useEffect(() => () => callback.current?.(false), []);
+}
+
+/** After a successful save: clear the dirty flag synchronously, then close (no "Discard changes?"). */
+export function closeAfterSave(onDirtyChange: ((dirty: boolean) => void) | undefined, close: () => void) {
+  if (onDirtyChange) flushSync(() => onDirtyChange(false));
+  close();
+}
+
 /* ------------------------------------------------------------------ local status vocabularies */
 
 interface LocalStatus {
@@ -96,6 +124,11 @@ export const LOCAL_VOCABULARIES: Record<string, Record<string, LocalStatus>> = {
     FAILED: { label: "Failed", tone: "danger", glossary: "The file could not be built. Export it again." },
     EXPIRED: { label: "Expired", tone: "neutral", glossary: "The file was deleted after 24 hours. Export it again." },
   },
+  payslip_question: {
+    OPEN: { label: "Open", tone: "warning", glossary: "Waiting for an answer from payroll." },
+    ANSWERED: { label: "Answered", tone: "success", glossary: "Answered; the employee was notified and can mark it resolved." },
+    CLOSED: { label: "Closed", tone: "neutral" },
+  },
   liability: {
     OPEN: { label: "Open", tone: "warning", glossary: "Owed to the authority; no remittance recorded yet." },
     REMITTED: { label: "Remitted", tone: "info", glossary: "A payment reference was recorded. Not reconciled yet." },
@@ -104,7 +137,7 @@ export const LOCAL_VOCABULARIES: Record<string, Record<string, LocalStatus>> = {
   attestation: {
     ACTIVE: { label: "Attestation active", tone: "success", glossary: "An approved attestation covers today." },
     PENDING_APPROVAL: { label: "Attestation pending approval", tone: "warning", glossary: "Waiting for a second person to approve (maker-checker)." },
-    MISSING: { label: "Attestation missing", tone: "danger", glossary: "Runs for this entity cannot be finalized until an attestation is approved." },
+    MISSING: { label: "Attestation missing", tone: "danger", glossary: "No approved attestation covers this entity today." },
     NOT_REQUIRED: { label: "Not required", tone: "neutral", glossary: "A usable country pack covers this entity." },
   },
   due: {
@@ -195,24 +228,11 @@ export function HonestLabels({ labels, className }: { labels: (string | null | u
 
 /* ------------------------------------------------------------------ banners and states */
 
-/** 409 / 412: "Someone else changed this" with a one-click reload (EC-UX-04). Never overwrite silently. */
-export function ConflictBanner({ error, onReload, className }: { error: unknown; onReload?: () => void; className?: string }) {
-  if (!isConflict(error)) return null;
-  return (
-    <div role="alert" className={cn("flex flex-wrap items-center gap-3 rounded-xl border border-warning/40 bg-warning-soft px-4 py-3 text-sm", className)}>
-      <AlertTriangle className="h-4 w-4 shrink-0 text-warning" aria-hidden />
-      <div className="min-w-0 flex-1">
-        <p className="font-medium">Someone else changed this</p>
-        <p className="text-muted-foreground">{(error as ApiError).message}</p>
-      </div>
-      {onReload && (
-        <Button variant="secondary" size="sm" className="min-h-[44px]" onClick={onReload}>
-          <RefreshCw className="h-4 w-4" aria-hidden /> Reload
-        </Button>
-      )}
-    </div>
-  );
-}
+/**
+ * 409 / 412 with Reload (EC-UX-04): one banner for every payroll area, so known refusal codes (expired FX
+ * quote, finalized run, cancelled batch, reversal hold…) read the same everywhere.
+ */
+export { ConflictBanner } from "@/components/payroll/inputs/shared";
 
 export function Notice({ tone = "info", title, children, className }: { tone?: "info" | "warning" | "danger"; title: ReactNode; children?: ReactNode; className?: string }) {
   const Icon = tone === "info" ? Info : AlertTriangle;

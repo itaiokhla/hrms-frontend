@@ -12,6 +12,11 @@ import { payrollApi } from "@/lib/payroll/api";
 
 import type {
   ApprovalRequest,
+  ArrearsActionResult,
+  ArrearsDetectOutcome,
+  ArrearsPreviewItem,
+  ArrearsProposal,
+  ArrearsTrigger,
   Claim,
   ComponentOption,
   EmployeeOption,
@@ -19,6 +24,8 @@ import type {
   Loan,
   OvertimeEntry,
   PayGroupOption,
+  PayPeriodOption,
+  RetroRunResult,
   Task,
   WageInput,
   WageInputImport,
@@ -216,6 +223,37 @@ export const tasksApi = {
   },
   removeEvidence: (id: number, evidenceId: number) => payrollApi.delete(`/tasks/${id}/evidence/${evidenceId}`),
   evidenceUrl: (id: number, evidenceId: number) => `/tasks/${id}/evidence/${evidenceId}`,
+};
+
+/* ------------------------------------------------------------------ arrears proposals and retro runs */
+
+export interface DetectBody {
+  employee_id: number;
+  from_date: string;
+  to_date?: string;
+  trigger: ArrearsTrigger;
+  keys?: string[];
+  policy_types?: string[];
+  reason: string;
+}
+
+/** routes/corrections.py: list needs payroll:run:read, decide payroll:run:approve, detect and retro runs payroll:run:create. */
+export const arrearsApi = {
+  list: (params: Params) => payrollApi.get<ListPage<ArrearsProposal>>("/payroll/arrears-proposals", { params: cleanParams(params) }),
+  get: (id: number | string) => payrollApi.get<ArrearsProposal>(`/payroll/arrears-proposals/${id}`),
+  approve: (id: number, comment: string | undefined, rowVersion: number) =>
+    payrollApi.post<ArrearsActionResult>(`/payroll/arrears-proposals/${id}/approve`, { comment: comment || null, row_version: rowVersion }),
+  reject: (id: number, reason: string, rowVersion: number) =>
+    payrollApi.post<ArrearsActionResult>(`/payroll/arrears-proposals/${id}/reject`, { reason, row_version: rowVersion }),
+  /** Preview records nothing: the per-component differences of every finalized period the change reaches. */
+  preview: (body: DetectBody) => payrollApi.post<{ items: ArrearsPreviewItem[] }>("/payroll/arrears-proposals/detect", { ...body, preview: true }),
+  detect: (body: DetectBody, idempotencyKey?: string) =>
+    payrollApi.post<{ items: ArrearsDetectOutcome[] }>("/payroll/arrears-proposals/detect", { ...body, preview: false }, { idempotencyKey }),
+  retroRun: (body: { pay_group_id: number; pay_period_id: number; proposal_ids: number[]; label?: string }, idempotencyKey?: string) =>
+    payrollApi.post<RetroRunResult>("/payroll/retro-runs", body, { idempotencyKey }),
+  /** GET /payroll/pay-groups/{id}/periods (payroll calendars), for the retro run's paying period. */
+  periods: (payGroupId: number) =>
+    payrollApi.get<ListPage<PayPeriodOption>>(`/payroll/pay-groups/${payGroupId}/periods`, { params: { limit: 100 } }),
 };
 
 /* ------------------------------------------------------------------ settings and lookups */

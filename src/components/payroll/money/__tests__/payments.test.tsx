@@ -4,10 +4,12 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import PayoutFilesPage from "@/app/(app)/payroll/payments/page";
 import BatchPage from "@/app/(app)/payroll/payments/batches/[id]/page";
 import NewBatchPage from "@/app/(app)/payroll/payments/new/page";
+import InstructionRoute from "@/app/(app)/payroll/payments/instructions/[id]/page";
+import { payrollError } from "@/lib/payroll/api";
 import { P } from "@/lib/permissions.generated";
 
 import { totalsByCurrency } from "../PayoutBatches";
-import { ME_ID, batch, conflict, funding, instruction, me, notFound, plain, routes, signIn } from "./fixtures";
+import { ME_ID, batch, conflict, fundingOption, instruction, me, notFound, plain, routes, signIn } from "./fixtures";
 
 const mockPush = jest.fn();
 let mockSearch = new URLSearchParams();
@@ -123,7 +125,7 @@ describe("Create payment batch", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: "Preview batches" }));
     await waitFor(() => expect(mockPost).toHaveBeenCalledWith("/payroll/payment-batches/proposal", { run_id: 12 }));
     expect(await within(dialog).findByText("1 batch will be created")).toBeInTheDocument();
-    expect(within(dialog).getByText("No active bank account on file")).toBeInTheDocument();
+    expect(within(dialog).getAllByText("No active bank account on file").length).toBeGreaterThan(0);
     expect(within(dialog).getByText("Exclusions (1)")).toBeInTheDocument();
     const create = within(dialog).getByRole("button", { name: "Create 1 batch for approval" });
     fireEvent.click(create);
@@ -171,9 +173,11 @@ describe("Batch detail", () => {
     mockParams = { id: "41" };
     mockGet.mockImplementation(routes({ "/payroll/payment-batches/41": batch() }));
     render(<BatchPage />);
-    expect(await screen.findByRole("button", { name: /Why this amount\?/ })).toBeInTheDocument();
+    const why = await screen.findByRole("region", { name: "Why this amount?" });
+    fireEvent.click(within(why).getByRole("button", { name: /Formula/ }));
+    expect(within(why).getByText("Settled (evidence)")).toBeInTheDocument();
     expect(screen.getByText("Exclusions (1)")).toBeInTheDocument();
-    expect(screen.getByText("No active bank account on file")).toBeInTheDocument();
+    expect(screen.getAllByText("No active bank account on file").length).toBeGreaterThan(0);
   });
 
   it("filters payments by failed, held and overdue", async () => {
@@ -204,7 +208,7 @@ describe("Batch detail", () => {
     mockParams = { id: "41" };
     const sha = "c".repeat(64);
     const b = batch({ status: "FILE_GENERATED", approved_by_user_id: 11, file: { format: "GENERIC_CSV", filename: "PB00000041.csv", sha256: sha, record_count: 2, totals: { INR: "246913.56" }, generated_at: "2026-10-21T11:00:00", download_count: 1, last_downloaded_at: "2026-10-21T11:05:00" } });
-    mockGet.mockImplementation(routes({ "/payroll/payment-batches/41": b, "/payroll/funding-accounts": { items: [funding()] } }));
+    mockGet.mockImplementation(routes({ "/payroll/payment-batches/41": b, "/payroll/funding-accounts/options": { items: [fundingOption()] } }));
     mockPost.mockResolvedValue({ id: 41, status: "SUBMITTED" });
     render(<BatchPage />);
     expect(await screen.findByText(sha)).toBeInTheDocument();
@@ -218,7 +222,7 @@ describe("Batch detail", () => {
     mockSearch = new URLSearchParams("modal=release&batch=41");
     const sha = "c".repeat(64);
     const b = batch({ status: "FILE_GENERATED", file: { format: "GENERIC_CSV", filename: "PB00000041.csv", sha256: sha, record_count: 2, totals: { INR: "246913.56" }, generated_at: null, download_count: 1, last_downloaded_at: null } });
-    mockGet.mockImplementation(routes({ "/payroll/payment-batches/41": b, "/payroll/funding-accounts": { items: [funding()] } }));
+    mockGet.mockImplementation(routes({ "/payroll/payment-batches/41": b, "/payroll/funding-accounts/options": { items: [fundingOption()] } }));
     mockPost.mockResolvedValue({ id: 41, status: "SUBMITTED" });
     render(<BatchPage />);
     const dialog = await screen.findByRole("dialog", { name: "Mark batch as submitted" });
@@ -234,7 +238,7 @@ describe("Batch detail", () => {
     signIn(SIGNATORY);
     mockParams = { id: "41" };
     const b = batch({ status: "FILE_GENERATED", file: { format: "GENERIC_CSV", filename: "f.csv", sha256: "d".repeat(64), record_count: 2, totals: {}, generated_at: null, download_count: 0, last_downloaded_at: null } });
-    mockGet.mockImplementation(routes({ "/payroll/payment-batches/41": b, "/payroll/funding-accounts": { items: [funding({ signatory_user_ids: [99] })] } }));
+    mockGet.mockImplementation(routes({ "/payroll/payment-batches/41": b, "/payroll/funding-accounts/options": { items: [fundingOption({ is_signatory: false })] } }));
     render(<BatchPage />);
     expect(await screen.findByText(/you are not one/)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Mark as submitted/ })).not.toBeInTheDocument();
@@ -269,5 +273,132 @@ describe("Batch detail", () => {
     expect(await within(sheet).findByText("Queued → Submitted")).toBeInTheDocument();
     expect(within(sheet).getAllByText("Sandbox").length).toBeGreaterThan(0);
     expect(within(sheet).getByRole("link", { name: /Open full page/ })).toHaveAttribute("href", "/payroll/payments/instructions/901");
+  });
+});
+
+describe("Manual payment proof (EC-PAY-14)", () => {
+  const RECONCILER = me({ [P.PAYROLL_PAYMENT_RECONCILE]: ["COMPANY"] });
+  const manual = (proofs: unknown[] = []) => ({
+    ...instruction({ status: "SUBMITTED", submission_channel: "MANUAL_UPLOAD", label: { key: "PROCESSING", text: "Processing", badge: null } }),
+    manual_proofs: proofs,
+    replaced_by_instruction_ids: [],
+  });
+  const proof = (overrides: Record<string, unknown> = {}) => ({
+    id: 3, instruction_id: 901, method: "CHEQUE", evidence_reference: "CHQ-0042", evidence_name: "cheque.pdf", evidence_mime: "application/pdf", evidence_sha256: "e".repeat(64),
+    note: null, status: "PENDING_REVIEW", submitted_by_user_id: 11, reviewed_by_user_id: null, reviewed_at: null, review_note: null, row_version: 1, created_at: "2026-10-22T09:00:00",
+    ...overrides,
+  });
+  const eventsRoute = { instruction: instruction(), events: [] };
+
+  it("uploads proof as multipart with the row version and stays unverified", async () => {
+    signIn(RECONCILER);
+    mockParams = { id: "901" };
+    mockGet.mockImplementation(routes({ "/payroll/payment-instructions/901": manual(), "/payroll/payment-instructions/901/events": eventsRoute }));
+    mockPost.mockResolvedValue(proof({ submitted_by_user_id: ME_ID }));
+    render(<InstructionRoute />);
+    expect((await screen.findAllByText("Submitted for manual payment — unverified")).length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole("button", { name: /Upload proof of manual payment/ }));
+    const dialog = await screen.findByRole("dialog", { name: "Upload proof of manual payment" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Upload proof" }));
+    expect((await within(dialog).findAllByText(/Give the cheque number/)).length).toBeGreaterThan(0);
+    expect(mockPost).not.toHaveBeenCalled();
+    fireEvent.change(within(dialog).getByLabelText(/^Reference/), { target: { value: "CHQ-0042" } });
+    const file = new File(["%PDF-1.4"], "cheque.pdf", { type: "application/pdf" });
+    fireEvent.change(within(dialog).getByLabelText("Proof file"), { target: { files: [file] } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Upload proof" }));
+    await waitFor(() => expect(mockPost).toHaveBeenCalledTimes(1));
+    const [url, form, options] = mockPost.mock.calls[0];
+    expect(url).toBe("/payroll/payment-instructions/901/manual-settle");
+    expect((form as FormData).get("method")).toBe("CHEQUE");
+    expect((form as FormData).get("reference")).toBe("CHQ-0042");
+    expect((form as FormData).get("row_version")).toBe("2");
+    expect(options.idempotencyKey).toEqual(expect.any(String));
+  });
+
+  it("lets a second person approve, but never the uploader", async () => {
+    signIn(RECONCILER);
+    mockParams = { id: "901" };
+    mockGet.mockImplementation(routes({ "/payroll/payment-instructions/901": manual([proof()]), "/payroll/payment-instructions/901/events": eventsRoute }));
+    mockPost.mockResolvedValue({ id: 3, status: "APPROVED", instruction_id: 901, row_version: 2 });
+    const { unmount } = render(<InstructionRoute />);
+    expect(await screen.findByText("Waiting for a second reviewer")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Upload proof of manual payment/ })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Approve proof" }));
+    await waitFor(() => expect(mockPost).toHaveBeenCalledWith("/payroll/manual-settlements/3/approve", { row_version: 1 }));
+    unmount();
+
+    mockGet.mockImplementation(routes({ "/payroll/payment-instructions/901": manual([proof({ submitted_by_user_id: ME_ID })]), "/payroll/payment-instructions/901/events": eventsRoute }));
+    render(<InstructionRoute />);
+    expect(await screen.findByText("You uploaded this proof, so another person reviews it.")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Approve proof" })).not.toBeInTheDocument();
+  });
+});
+
+describe("Value dates, FX quotes and signatories", () => {
+  it("shows the server's value-date warnings on an unsent batch", async () => {
+    signIn(APPROVER);
+    mockParams = { id: "41" };
+    mockGet.mockImplementation(routes({ "/payroll/payment-batches/41": batch({ value_date: "2026-11-02", value_date_warnings: ["VALUE_DATE_SHIFTED", "VALUE_DATE_AFTER_PAY_DATE"] }) }));
+    render(<BatchPage />);
+    expect(await screen.findByText(/Value date is after the pay date/)).toBeInTheDocument();
+    expect(screen.getByText(/moved to the next business day/)).toBeInTheDocument();
+  });
+
+  it("previews the default value date and its warnings", async () => {
+    signIn(PREPARER);
+    mockSearch = new URLSearchParams("run=12");
+    mockGet.mockImplementation(routes({ "/payroll/runs": { total: 1, items: [RUN] } }));
+    mockPost.mockResolvedValue({
+      run_id: 12,
+      batches: [],
+      exclusions: [],
+      bank_changes: [],
+      value_date: { requested: "2026-10-31", value_date: "2026-11-02", shifted: true, warnings: ["VALUE_DATE_SHIFTED", "VALUE_DATE_AFTER_PAY_DATE"] },
+    });
+    render(<NewBatchPage />);
+    await screen.findByRole("option", { name: /Oct 2026/ });
+    fireEvent.click(screen.getByRole("button", { name: "Preview batches" }));
+    expect(await screen.findByText(/Value date is after the pay date/)).toBeInTheDocument();
+  });
+
+  it("explains an expired FX quote on release instead of a generic conflict", async () => {
+    signIn(SIGNATORY);
+    mockParams = { id: "41" };
+    mockSearch = new URLSearchParams("modal=release&batch=41");
+    const sha = "c".repeat(64);
+    const b = batch({ status: "FILE_GENERATED", file: { format: "GENERIC_CSV", filename: "PB00000041.csv", sha256: sha, record_count: 2, totals: { INR: "246913.56" }, generated_at: null, download_count: 1, last_downloaded_at: null } });
+    mockGet.mockImplementation(routes({ "/payroll/payment-batches/41": b, "/payroll/funding-accounts/options": { items: [fundingOption()] } }));
+    mockPost.mockRejectedValue(payrollError(409, { detail: "The exchange-rate quote of PI000000901 expired.", code: "FX_QUOTE_EXPIRED" }));
+    render(<BatchPage />);
+    const dialog = await screen.findByRole("dialog", { name: "Mark batch as submitted" });
+    fireEvent.change(within(dialog).getByLabelText(/Type “PB00000041” to confirm/), { target: { value: "PB00000041" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Mark as submitted" }));
+    expect(await screen.findByText("Exchange-rate quote expired")).toBeInTheDocument();
+    expect(screen.queryByText("Someone else changed this")).not.toBeInTheDocument();
+  });
+});
+
+describe("Reissue approval", () => {
+  const failed = (requester: number) => ({
+    ...instruction({ status: "FAILED", failure_message: "Account closed", reissue_request: { requested_by_user_id: requester, at: "2026-10-22T08:00:00", reason: "Employee fixed the account" } }),
+    manual_proofs: [],
+    replaced_by_instruction_ids: [],
+  });
+
+  it("lets a second approver approve a requested reissue, never the requester", async () => {
+    signIn(APPROVER);
+    mockParams = { id: "901" };
+    mockGet.mockImplementation(routes({ "/payroll/payment-instructions/901": failed(11), "/payroll/payment-instructions/901/events": { instruction: instruction(), events: [] } }));
+    mockPost.mockResolvedValue({ status: "REISSUED" });
+    const { unmount } = render(<InstructionRoute />);
+    expect(await screen.findByText("Reissue waiting for approval")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Approve reissue" }));
+    await waitFor(() => expect(mockPost).toHaveBeenCalledWith("/payroll/payment-instructions/901/reissue/approve", { row_version: 2 }));
+    unmount();
+
+    mockGet.mockImplementation(routes({ "/payroll/payment-instructions/901": failed(ME_ID), "/payroll/payment-instructions/901/events": { instruction: instruction(), events: [] } }));
+    render(<InstructionRoute />);
+    expect(await screen.findByText("You requested this reissue, so another person approves it.")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Approve reissue" })).not.toBeInTheDocument();
   });
 });

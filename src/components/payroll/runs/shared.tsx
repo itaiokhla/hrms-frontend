@@ -1,13 +1,12 @@
 "use client";
 
-import { AlertTriangle, Info, RefreshCw, SearchX } from "lucide-react";
+import { AlertTriangle, Info, SearchX } from "lucide-react";
 import Link from "next/link";
 import { Suspense, useMemo, type ReactNode } from "react";
 
 import { CurrencyBadge } from "@/components/payroll/CurrencyBadge";
 import { HideAmountsToggle, MoneyText } from "@/components/payroll/MoneyText";
 import { StepUpProvider } from "@/components/payroll/StepUpAuthModal";
-import { Button } from "@/components/ui/button";
 import { EmptyState, PageHeader } from "@/components/ui/layout";
 import { Card, Skeleton } from "@/components/ui/primitives";
 import { can } from "@/lib/access";
@@ -16,7 +15,6 @@ import { cn } from "@/lib/cn";
 import { fmtDate } from "@/lib/format";
 import { useApi } from "@/lib/hooks";
 import { needsIsoCodes } from "@/lib/money";
-import { isConflict } from "@/lib/payroll/api";
 import { P } from "@/lib/permissions.generated";
 import type { Me } from "@/lib/types";
 
@@ -79,24 +77,11 @@ export const canReadOverview = (me: Me | null | undefined) => can(me, P.PAYROLL_
 
 /* ------------------------------------------------------------------ banners */
 
-/** 409 / 412: "Someone else changed this" with Reload (EC-UX-04). Never overwrite silently. */
-export function ConflictBanner({ error, onReload, className }: { error: unknown; onReload?: () => void; className?: string }) {
-  if (!isConflict(error)) return null;
-  return (
-    <div role="alert" className={cn("flex flex-wrap items-center gap-3 rounded-xl border border-warning/40 bg-warning-soft px-4 py-3 text-sm", className)}>
-      <AlertTriangle className="h-4 w-4 shrink-0 text-warning" aria-hidden />
-      <div className="min-w-0 flex-1">
-        <p className="font-medium">Someone else changed this</p>
-        <p className="text-muted-foreground">{(error as ApiError).message}</p>
-      </div>
-      {onReload && (
-        <Button variant="secondary" size="sm" className="min-h-[44px]" onClick={onReload}>
-          <RefreshCw className="h-4 w-4" aria-hidden /> Reload
-        </Button>
-      )}
-    </div>
-  );
-}
+/**
+ * 409 / 412 with Reload (EC-UX-04): one banner for every payroll area, so known refusal codes (expired FX
+ * quote, finalized run, cancelled batch, reversal hold…) read the same everywhere.
+ */
+export { ConflictBanner } from "@/components/payroll/inputs/shared";
 
 export function Notice({ tone = "info", title, children, action, className }: { tone?: "info" | "warning" | "danger"; title: ReactNode; children?: ReactNode; action?: ReactNode; className?: string }) {
   const Icon = tone === "info" ? Info : AlertTriangle;

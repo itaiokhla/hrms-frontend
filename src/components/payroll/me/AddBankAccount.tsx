@@ -30,7 +30,9 @@ import {
   type BankForm,
 } from "./bankFormat";
 import { ConflictBanner, Notice } from "./shared";
-import type { BankChangeResult, MyBankAccount } from "./types";
+import type { BankChangeResult, MyBankAccount, PayrollPreferences } from "./types";
+
+export type BankPolicy = PayrollPreferences["bank_accounts"];
 
 const STEPS = ["Confirm it's you", "Account details", "Proof", "Review"] as const;
 const EVIDENCE_TYPES = [".pdf", ".png", ".jpg", ".jpeg", "application/pdf", "image/png", "image/jpeg"];
@@ -53,6 +55,12 @@ export interface AddBankAccountProps {
   /** Default currency (the pay group's, when known). */
   defaultCurrency?: string;
   defaultCountry?: string;
+  /**
+   * The bank-account settings resolved for the employee (GET /me/payroll/preferences): split payments,
+   * the maximum number of accounts, allowed countries and the cooling-off period. Undefined when they
+   * couldn't be read: the wizard then relies on the server's answer (ALLOCATION_REQUIRED and friends).
+   */
+  policy?: BankPolicy;
   onDone: (result: BankChangeResult) => void;
   onCancel: () => void;
   /** Unsaved details: the modal route asks "Discard changes?" before closing (D-12). */
@@ -65,7 +73,7 @@ export interface AddBankAccountProps {
  * the account is yours: HR verifies ownership, and a new account is used only after approval and its
  * cooling-off period.
  */
-export function AddBankAccountWizard({ accounts, defaultCurrency, defaultCountry, onDone, onCancel, onDirtyChange }: AddBankAccountProps) {
+export function AddBankAccountWizard({ accounts, defaultCurrency, defaultCountry, policy, onDone, onCancel, onDirtyChange }: AddBankAccountProps) {
   const { requestStepUp } = useStepUp();
   const [step, setStep] = useState(0);
   const [form, setForm] = useState<BankForm>({ ...EMPTY_BANK_FORM, country: defaultCountry ?? "", currency: defaultCurrency ?? "" });
@@ -76,15 +84,36 @@ export function AddBankAccountWizard({ accounts, defaultCurrency, defaultCountry
   const [replaces, setReplaces] = useState<string>("");
   const [allocation, setAllocation] = useState<{ type: string; value: string }>({ type: "PRIMARY", value: "" });
   const [splitRequired, setSplitRequired] = useState(false);
+  const [replaceError, setReplaceError] = useState<string>();
   const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState<{ result: BankChangeResult; proofFailed: boolean } | null>(null);
   const key = useRef(newIdempotencyKey());
   const limits = useApi(() => meApi.uploadLimits(), []);
 
+  // The countries the employer allows (null: any country the bank formats know).
+  const countries = useMemo(() => {
+    const allowed = policy?.allowed_countries;
+    return allowed && allowed.length ? BANK_COUNTRIES.filter((c) => allowed.includes(c)) : BANK_COUNTRIES;
+  }, [policy?.allowed_countries]);
+
+  // The pay currency and country hints can arrive after the wizard mounted: fill them in unless chosen.
+  useEffect(() => {
+    if (defaultCurrency) setForm((prev) => (prev.currency ? prev : { ...prev, currency: defaultCurrency }));
+  }, [defaultCurrency]);
+  useEffect(() => {
+    if (defaultCountry && countries.includes(defaultCountry)) setForm((prev) => (prev.country ? prev : { ...prev, country: defaultCountry }));
+  }, [defaultCountry, countries]);
+
   const active = accounts.filter((a) => a.status === "ACTIVE");
-  // Split payments are on when an account already shares the net pay, or the server asked for an allocation.
-  const split = splitRequired || accounts.some((a) => a.allocation && a.allocation.type !== "PRIMARY");
+  // Split payments: never when the employer turned them off; otherwise when they are on and an account
+  // exists, when an account already shares the net pay, or when the server asked for an allocation.
+  const splitOff = policy?.split_payments_enabled === false;
+  const split =
+    !splitOff && (splitRequired || accounts.some((a) => a.allocation && a.allocation.type !== "PRIMARY") || (policy?.split_payments_enabled === true && active.length > 0));
+  // At the employer's maximum number of accounts the new one has to replace one of them.
+  const maxAccounts = policy?.effective_max_accounts ?? null;
+  const atMax = split && maxAccounts !== null && active.length >= maxAccounts;
 
   // Step 0: a fresh step-up is required before bank details can change (EC-BNK-06).
   const stepUp = useApi(() => stepUpApi.status(), []);
@@ -118,6 +147,10 @@ export function AddBankAccountWizard({ accounts, defaultCurrency, defaultCountry
       const problems = checkBankForm(form, { submitting: true });
       if (Object.keys(problems).length) return;
       if (split && allocation.type !== "PRIMARY" && allocation.type !== "REMAINDER" && !allocation.value.trim()) return;
+      if (atMax && !replaces) {
+        setReplaceError(`You already have ${maxAccounts} account${maxAccounts === 1 ? "" : "s"}, the most your employer allows. Choose the one this account replaces.`);
+        return;
+      }
     }
     setStep((s) => Math.min(s + 1, 3));
   };
@@ -263,7 +296,7 @@ export function AddBankAccountWizard({ accounts, defaultCurrency, defaultCountry
                 aria-invalid={!!visible("country")}
               >
                 <option value="">Choose a country</option>
-                {BANK_COUNTRIES.map((c) => (
+                {countries.map((c) => (
                   <option key={c} value={c}>
                     {countryName(c)} ({c})
                   </option>
@@ -322,9 +355,21 @@ export function AddBankAccountWizard({ accounts, defaultCurrency, defaultCountry
             <fieldset className="space-y-3 rounded-2xl border border-border p-4">
               <legend className="px-1 text-sm font-semibold">How much goes to this account?</legend>
               {active.length > 0 && (
-                <Field label="Replaces (optional)" hint="Leave empty to add this account next to the others.">
-                  <Select value={replaces} onChange={(e) => setReplaces(e.target.value)} className="min-h-[44px]">
-                    <option value="">Keep my other accounts</option>
+                <Field
+                  label={atMax ? "Replaces" : "Replaces (optional)"}
+                  required={atMax}
+                  error={replaceError}
+                  hint={atMax ? undefined : `Leave empty to add this account next to the others${maxAccounts ? ` (up to ${maxAccounts} accounts)` : ""}.`}
+                >
+                  <Select
+                    value={replaces}
+                    onChange={(e) => {
+                      setReplaces(e.target.value);
+                      setReplaceError(undefined);
+                    }}
+                    className="min-h-[44px]"
+                  >
+                    <option value="">{atMax ? "Choose an account" : "Keep my other accounts"}</option>
                     {active.map((a) => (
                       <option key={a.id} value={a.id}>
                         {a.bank_name ?? "Account"} {a.account_masked}
@@ -417,7 +462,10 @@ export function AddBankAccountWizard({ accounts, defaultCurrency, defaultCountry
             <p className="font-medium">What happens next</p>
             <ul className="mt-1 list-disc space-y-1 ps-5 text-muted-foreground">
               <li>HR checks the account. You and your contact addresses get a security notification about this change.</li>
-              <li>Until it is approved and its waiting (cooling-off) period has passed, your salary keeps going to your current account.</li>
+              <li>
+                Until it is approved and its waiting (cooling-off) period
+                {policy?.cooling_off_hours ? ` of ${policy.cooling_off_hours} hour${policy.cooling_off_hours === 1 ? "" : "s"}` : ""} has passed, your salary keeps going to your current account.
+              </li>
               <li>If you didn't make this change, contact HR straight away.</li>
             </ul>
           </div>

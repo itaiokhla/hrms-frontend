@@ -20,9 +20,11 @@ import type {
   CsvMapping,
   FundingAccount,
   FundingAccountInput,
+  FundingAccountOption,
   ImportStatementResult,
   InstructionDetail,
   LegalEntityOption,
+  ManualProof,
   MatchQueue,
   OverdueResult,
   PageOf,
@@ -48,7 +50,7 @@ export interface FetchedFile {
   blob: Blob;
   filename: string | null;
   mime: string;
-  /** `X-Content-SHA256` (bank files), so the UI can show the hash it received. */
+  /** `X-Content-SHA256` (bank files) or `X-Proof-SHA256` (manual proofs), so the UI can show the hash it received. */
   sha256: string | null;
 }
 
@@ -67,7 +69,7 @@ export async function fetchFile(url: string): Promise<FetchedFile> {
       blob: response.data,
       filename: filenameOf(headers["content-disposition"]),
       mime: headers["content-type"] ?? response.data?.type ?? "application/octet-stream",
-      sha256: headers["x-content-sha256"] ?? null,
+      sha256: headers["x-content-sha256"] ?? headers["x-proof-sha256"] ?? null,
     };
   } catch (error) {
     const response = (error as { response?: { status: number; data?: unknown } }).response;
@@ -154,6 +156,25 @@ export const paymentsApi = {
     payrollApi.post<{ id: number; status: string }>(`/payroll/payment-instructions/${id}/release-hold`, cleanParams({ reason, row_version: rowVersion })),
   reissue: (id: number, reason: string, rowVersion?: number) =>
     payrollApi.post<{ status: string }>(`/payroll/payment-instructions/${id}/reissue`, cleanParams({ reason, row_version: rowVersion })),
+  /** A second person approves a requested reissue (payroll.payments.reissue_requires_approval). */
+  approveReissue: (id: number, rowVersion?: number, note?: string) =>
+    payrollApi.post<{ status: string }>(`/payroll/payment-instructions/${id}/reissue/approve`, cleanParams({ note, row_version: rowVersion })),
+  /** Proof of a payment made outside the system (multipart; settles nothing until a second person approves). */
+  submitManualProof: (id: number, form: { method: string; reference: string; note?: string; file: File; rowVersion?: number }, idempotencyKey?: string) => {
+    const data = new FormData();
+    data.append("method", form.method);
+    data.append("reference", form.reference);
+    if (form.note) data.append("note", form.note);
+    if (form.rowVersion !== undefined) data.append("row_version", String(form.rowVersion));
+    data.append("file", form.file);
+    return payrollApi.post<ManualProof>(`/payroll/payment-instructions/${id}/manual-settle`, data, { idempotencyKey });
+  },
+  approveManualProof: (proofId: number, rowVersion: number, note?: string) =>
+    payrollApi.post<{ id: number; status: string; instruction_id: number; row_version: number }>(`/payroll/manual-settlements/${proofId}/approve`, cleanParams({ note, row_version: rowVersion })),
+  /** The uploaded proof file (payroll:payment:reconcile in scope); every fetch is audited server-side. */
+  proofFileUrl: (proofId: number, download = false) => `/payroll/manual-settlements/${proofId}/file${download ? "?download=true" : ""}`,
+  rejectManualProof: (proofId: number, note: string, rowVersion: number) =>
+    payrollApi.post<{ id: number; status: string; instruction_id: number; row_version: number }>(`/payroll/manual-settlements/${proofId}/reject`, { note, row_version: rowVersion }),
   /** Finalized runs this person can see (to create batches from). */
   runs: (status?: string) => payrollApi.get<PageOf<RunOption>>("/payroll/runs", { params: cleanParams({ status, limit: 50 }) }),
   run: (id: number | string) => payrollApi.get<RunOption>(`/payroll/runs/${id}`),
@@ -193,6 +214,9 @@ export const reconApi = {
 export const fundingApi = {
   list: (params: { legal_entity_id?: number | string; status?: string; purpose?: string } = {}) =>
     payrollApi.get<{ items: FundingAccount[] }>("/payroll/funding-accounts", { params: cleanParams(params) }),
+  /** Masked read-only list for payment users (any payroll:payment:* permission or funding_accounts:manage). */
+  options: (params: { legal_entity_id?: number | string; currency?: string; include_inactive?: boolean } = {}) =>
+    payrollApi.get<{ items: FundingAccountOption[] }>("/payroll/funding-accounts/options", { params: cleanParams(params) }),
   get: (id: number | string) => payrollApi.get<FundingAccount>(`/payroll/funding-accounts/${id}`),
   create: (legalEntityId: number, body: FundingAccountInput, idempotencyKey?: string) =>
     payrollApi.post<FundingAccount>(`/payroll/legal-entities/${legalEntityId}/funding-accounts`, body, { idempotencyKey }),

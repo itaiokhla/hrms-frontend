@@ -13,6 +13,7 @@ import type {
   CatalogueReport,
   ComplianceOverview,
   DocumentExport,
+  DownloadPage,
   GenerationStatus,
   Liability,
   LiabilityPage,
@@ -27,6 +28,7 @@ import type {
   RunOption,
   RunPublishResult,
   SignedLink,
+  StaffPayslipQuestion,
   StatutoryReport,
   TransitionResult,
 } from "./types";
@@ -110,14 +112,38 @@ export const payslipsApi = {
   retryFailed: (runId: number) => payrollApi.post<{ run_id: number; requeued: number }>(`/payroll/runs/${runId}/payslips/retry-failed`),
 };
 
+/* ------------------------------------------------------------------ payslip questions (staff) */
+
+export interface QuestionQuery {
+  status?: string | null;
+  employee_id?: number | null;
+  run_id?: number | null;
+  document_id?: number | null;
+  legal_entity_id?: number | null;
+  skip?: number;
+  limit?: number;
+}
+
+/** routes/payslip_queries.py: payroll:payslip:read beyond SELF to read, payroll:payslip:publish to answer. */
+export const questionsApi = {
+  list: (query: QuestionQuery) => payrollApi.get<ListPage<StaffPayslipQuestion>>("/payroll/payslip-questions", { params: cleanParams(query) }),
+  get: (id: number | string) => payrollApi.get<StaffPayslipQuestion>(`/payroll/payslip-questions/${encodeURIComponent(String(id))}`),
+  answer: (id: number, body: { answer: string; close: boolean; row_version?: number }, idempotencyKey?: string) =>
+    payrollApi.post<{ id: number; document_id: number; status: string; row_version: number }>(`/payroll/payslip-questions/${id}/answer`, body, idempotencyKey ? { idempotencyKey } : undefined),
+};
+
 /* ------------------------------------------------------------------ download center */
 
 export const exportsApi = {
+  /** The caller's own exports and report exports in one list, newest first, with signed links (routes/documents.py). */
+  mine: (params: { source?: "EXPORT" | "REPORT_EXPORT" | null; skip?: number; limit?: number } = {}) =>
+    payrollApi.get<DownloadPage>("/payroll/downloads/mine", { params: cleanParams(params) }),
   list: (skip = 0, limit = 50) => payrollApi.get<ListPage<DocumentExport>>("/payroll/exports", { params: { skip, limit } }),
   /** POST: a signed link for a READY export (409 EXPORT_NOT_READY otherwise). */
   link: (id: number) => payrollApi.post<SignedLink>(`/payroll/exports/${id}/download`),
-  reportList: (limit = 50) => payrollApi.get<{ items: ReportExport[] }>("/payroll/report-exports", { params: { limit } }),
-  reportFileUrl: (id: number) => `/payroll/report-exports/${id}/download`,
+  /** POST: a signed link for the caller's own READY report export (409 EXPORT_NOT_READY / EXPORT_EXPIRED). */
+  reportLink: (id: number) => payrollApi.post<SignedLink>(`/payroll/report-exports/${id}/link`),
+  reportList: (limit = 50) => payrollApi.get<{ total?: number; items: ReportExport[] }>("/payroll/report-exports", { params: { limit } }),
 };
 
 /* ------------------------------------------------------------------ reports */

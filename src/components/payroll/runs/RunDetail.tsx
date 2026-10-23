@@ -223,7 +223,10 @@ function StaleBanner() {
       {data?.employees.length ? <span className="block">{data.employees.slice(0, 5).map((e) => e.employee_name ?? `#${e.employee_id}`).join(", ")}{data.employees.length > 5 ? ` and ${data.employees.length - 5} more` : ""}.</span> : null}
       {retro && !retro.available && retro.reason && (
         <span id="retro-reason" className="mt-1 block text-xs">
-          {retro.reason}
+          {retro.reason}{" "}
+          <Link href="/payroll/inputs?tab=arrears" className="font-medium text-primary hover:underline">
+            See arrears proposals
+          </Link>
         </span>
       )}
       {!canRecalc && <span className="mt-1 block text-xs">Recalculation is not available to you at this stage.</span>}

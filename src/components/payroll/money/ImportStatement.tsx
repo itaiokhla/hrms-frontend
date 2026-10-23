@@ -14,7 +14,7 @@ import { newIdempotencyKey } from "@/lib/payroll/api";
 import { MatchesTable } from "./Reconciliation";
 import { reconApi } from "./api";
 import { ConflictBanner, ErrorSummary, Notice, fieldErrors, humanize } from "./shared";
-import type { CsvMapping, FundingAccount, ImportStatementResult } from "./types";
+import type { CsvMapping, FundingChoice, ImportStatementResult } from "./types";
 
 export const MAX_STATEMENT_BYTES = 10 * 1024 * 1024;
 
@@ -160,7 +160,7 @@ export function ImportStatementModal({
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
-  fundingAccounts: FundingAccount[];
+  fundingAccounts: FundingChoice[];
   fundingAllowed: boolean;
   knownFundingIds: number[];
   onImported: () => void;
@@ -179,7 +179,7 @@ export function ImportStatementModal({
 
   useEffect(() => {
     if (!open) return;
-    setFundingId(fundingAccounts.length === 1 ? String(fundingAccounts[0].id) : "");
+    setFundingId("");
     setFile(null);
     setPreview(null);
     setMapping({});
@@ -190,6 +190,13 @@ export function ImportStatementModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
+  // The list usually arrives after the modal opens: preselect the only active account then.
+  const activeAccounts = fundingAccounts.filter((a) => a.status === "ACTIVE");
+  const onlyAccountId = activeAccounts.length === 1 ? String(activeAccounts[0].id) : "";
+  useEffect(() => {
+    if (open && onlyAccountId) setFundingId((current) => current || onlyAccountId);
+  }, [open, onlyAccountId]);
+
   useEffect(() => onDirtyChange?.(!!file && !result), [file, result, onDirtyChange]);
 
   const account = fundingAccounts.find((a) => String(a.id) === fundingId);
@@ -197,12 +204,13 @@ export function ImportStatementModal({
   const choose = async (files: File[]) => {
     const f = files[0];
     if (!f) return;
+    // Detect first, then show the file: "detected as …" never flashes a guess before the preview.
+    const head = await readText(f).catch(() => "");
+    const fmt = detectFormat(f.name, head);
     setFile(f);
     setResult(null);
     setError(null);
     key.current = newIdempotencyKey();
-    const head = await readText(f).catch(() => "");
-    const fmt = detectFormat(f.name, head);
     setFormat(fmt);
     if (fmt === "CSV") {
       const p = previewCsv(head);
@@ -249,7 +257,7 @@ export function ImportStatementModal({
   };
 
   const fundingOptions = useMemo(() => {
-    if (fundingAllowed) return fundingAccounts.filter((a) => a.status === "ACTIVE").map((a) => ({ id: a.id, label: `${a.name} · ${a.currency} · ${a.account_masked}` }));
+    if (fundingAllowed) return fundingAccounts.filter((a) => a.status === "ACTIVE").map((a) => ({ id: a.id, label: `${a.name} · ${a.currency} · ${a.account_masked}${a.legal_entity_name ? ` · ${a.legal_entity_name}` : ""}` }));
     return knownFundingIds.map((id) => ({ id, label: `Funding account #${id}` }));
   }, [fundingAllowed, fundingAccounts, knownFundingIds]);
 

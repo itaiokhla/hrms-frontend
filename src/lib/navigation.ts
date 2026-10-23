@@ -2,6 +2,7 @@ import {
   ArrowLeftRight,
   BarChart3,
   Boxes,
+  Calculator,
   CalendarCheck2,
   CalendarDays,
   CalendarRange,
@@ -13,6 +14,7 @@ import {
   FileText,
   Gauge,
   Coins,
+  Download,
   History,
   Landmark,
   LayoutDashboard,
@@ -172,6 +174,15 @@ export const PAYROLL_WORKSPACE_ITEMS: NavItem[] = [
     visible: (me) => beyondSelfAny(me, [P.PAYROLL_REPORTS_READ, P.PAYROLL_REPORTS_EXPORT]),
   },
   {
+    // The download center lists the caller's own export jobs; creating one (payslip ZIPs, registers,
+    // report files) needs payslip or report export access beyond SELF, so self-service users never get
+    // an entry for a page that could only ever be empty for them.
+    label: "Downloads",
+    href: "/downloads",
+    icon: Download,
+    visible: (me) => beyondSelfAny(me, [P.PAYROLL_REPORTS_EXPORT, P.PAYROLL_PAYSLIP_READ, P.PAYROLL_PAYSLIP_PUBLISH]),
+  },
+  {
     label: "Payroll settings",
     href: "/settings/payroll/general",
     icon: SlidersHorizontal,
@@ -206,17 +217,34 @@ export const PAY_SELF_SERVICE_ITEMS: NavItem[] = [
     visible: (me) => hasEmployee(me) && can(me, P.PAYROLL_PAYSLIP_READ, "SELF"),
   },
   {
+    // The page itself is gated on the tax profile grant; it says plainly when tax details are not
+    // available for the employee's country yet. Both grants are in the default self-service role.
+    label: "My Tax",
+    href: "/me/tax",
+    icon: Calculator,
+    visible: (me) =>
+      hasEmployee(me) && can(me, P.PAYROLL_PAYSLIP_READ, "SELF") && can(me, P.PAYROLL_TAX_PROFILE_READ, "SELF"),
+  },
+  {
     label: "My Bank Accounts",
     href: "/me/bank-accounts",
     icon: Landmark,
     visible: (me) => hasEmployee(me) && can(me, P.PAYROLL_BANK_DETAILS_READ_MASKED, "SELF"),
   },
   {
-    label: "My Loans & Claims",
+    // Same grants as the page (/me/loans), so a claims-only grant never lands on "no access".
+    label: "My Loans",
     href: "/me/loans",
     icon: Coins,
+    visible: (me) => hasEmployee(me) && (can(me, P.PAYROLL_LOANS_READ, "SELF") || can(me, P.PAYROLL_LOANS_MANAGE, "SELF")),
+  },
+  {
+    label: "My Claims",
+    href: "/me/claims",
+    icon: Receipt,
     visible: (me) =>
-      hasEmployee(me) && (can(me, P.PAYROLL_LOANS_READ, "SELF") || can(me, P.PAYROLL_REIMBURSEMENTS_READ, "SELF")),
+      hasEmployee(me) &&
+      (can(me, P.PAYROLL_REIMBURSEMENTS_READ, "SELF") || can(me, P.PAYROLL_REIMBURSEMENTS_MANAGE, "SELF")),
   },
 ];
 

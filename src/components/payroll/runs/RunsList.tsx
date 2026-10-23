@@ -1,7 +1,7 @@
 "use client";
 
 import { ListChecks, Plus } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useMemo, useState } from "react";
 
 import { useCan } from "@/components/access/Can";
@@ -21,26 +21,6 @@ import { MoneyStack, RUN_TYPE_LABELS, WorkspaceHeader, canCreateRuns, figureByCu
 import type { Run } from "./types";
 
 const LIMIT = 50;
-/** Actions that are a decision or a step for the viewer ("Needs my action"); server-computed per user. */
-export const MY_ACTIONS = new Set([
-  "PRECHECK_PASSED",
-  "PRECHECK_BLOCKED",
-  "CALCULATE",
-  "SUBMIT_FOR_APPROVAL",
-  "APPROVE_STEP",
-  "APPROVE_FINAL",
-  "FINALIZE",
-  "REWORK",
-  "RESUME_REVIEW",
-  "APPROVE_PAYMENTS",
-  "SUBMIT_PAYMENTS",
-  "RECONCILE",
-  "CLOSE",
-]);
-
-export function needsMyAction(run: Run): boolean {
-  return run.available_actions.some((a) => MY_ACTIONS.has(a));
-}
 
 export function stageText(run: Pick<Run, "stage">): string {
   if (!run.stage) return "—";
@@ -51,6 +31,7 @@ export function stageText(run: Pick<Run, "stage">): string {
 /** Pay Runs list (3.8 §5.2). */
 export function RunsList() {
   const router = useRouter();
+  const search = useSearchParams();
   const { me } = useCan();
   const lookups = useLookups();
   const newRun = useModalRoute("new-run", { keys: ["pay_group"] });
@@ -59,7 +40,9 @@ export function RunsList() {
   const [period, setPeriod] = useState("");
   const [type, setType] = useState("");
   const [status, setStatus] = useState("");
-  const [mine, setMine] = useState(false);
+  // "Needs my action" is answered by the server (needs_my_action=true): a run counts when its next step is
+  // one the viewer may take now in its scope; for approvals only the current approver. Deep link: ?mine=1.
+  const [mine, setMine] = useState(() => search?.get("mine") === "1");
   const [skip, setSkip] = useState(0);
   const groupNumber = Number(group) || 0;
   const periods = useApi(() => runsApi.periods(groupNumber), [groupNumber], { enabled: groupNumber > 0 });
@@ -71,14 +54,13 @@ export function RunsList() {
       pay_period_id: period,
       run_type: type,
       status,
-      // "Needs my action" filters the newest 200 runs on the client: the API has no such filter.
-      skip: mine ? 0 : skip,
-      limit: mine ? 200 : LIMIT,
+      needs_my_action: mine ? true : undefined,
+      skip,
+      limit: LIMIT,
     }),
     [entity, group, period, type, status, skip, mine],
   );
   const { data, error, loading, reload } = useApi(() => runsApi.list(params), [params]);
-  const rows = useMemo(() => (mine ? (data?.items ?? []).filter(needsMyAction) : data?.items), [data, mine]);
   const reset = () => setSkip(0);
 
   const columns: Column<Run>[] = [
@@ -192,7 +174,7 @@ export function RunsList() {
             <DataTable
               caption="Pay runs"
               columns={columns}
-              rows={rows}
+              rows={data?.items}
               loading={loading}
               rowKey={(r) => r.id}
               onRowClick={(r) => router.push(`/payroll/runs/${r.id}`)}
@@ -200,10 +182,10 @@ export function RunsList() {
               empty={
                 <EmptyState
                   icon={<ListChecks />}
-                  title={filtered ? "No runs match these filters" : "No pay runs yet"}
+                  title={mine ? "Nothing needs your action" : filtered ? "No runs match these filters" : "No pay runs yet"}
                   description={
                     mine
-                      ? "Nothing in the newest 200 runs waits for you."
+                      ? "No run in your scope is waiting for a step you can take now."
                       : filtered
                         ? "Clear a filter to see more runs."
                         : create
@@ -220,7 +202,7 @@ export function RunsList() {
                 />
               }
             />
-            {!mine && data && <Pagination total={data.total} skip={skip} limit={LIMIT} onChange={setSkip} />}
+            {data && <Pagination total={data.total} skip={skip} limit={LIMIT} onChange={setSkip} />}
           </>
         )}
       </Card>

@@ -29,12 +29,14 @@ import {
   LookupField,
   Notice,
   WorkspaceHeader,
+  closeAfterSave,
   errorText,
   fieldErrors,
   formatDate,
   formatDateTime,
   isNotFound,
   useEntities,
+  useReportDirty,
 } from "./shared";
 import { PAYSLIP_FILTER_STATUSES, PUBLISHED_STATES, type BulkPublishResult, type PayslipSummary, type RunOption } from "./types";
 
@@ -170,11 +172,26 @@ function ReasonForm({
 }
 
 /** Manual publish of a run's remaining payslips (3.8 §6: `?modal=publish&run=`). */
-export function PublishRunModal({ open, onOpenChange, runId, runName, onDone }: { open: boolean; onOpenChange: (o: boolean) => void; runId: number | null; runName?: string; onDone: () => void }) {
+export function PublishRunModal({
+  open,
+  onOpenChange,
+  runId,
+  runName,
+  onDone,
+  onDirtyChange,
+}: {
+  open: boolean;
+  onOpenChange: (o: boolean) => void;
+  runId: number | null;
+  runName?: string;
+  onDone: () => void;
+  onDirtyChange?: (dirty: boolean) => void;
+}) {
   const [reason, setReason] = useState("");
   const [reasonError, setReasonError] = useState<string>();
   const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
+  useReportDirty(open && !!reason.trim(), onDirtyChange);
   useEffect(() => {
     if (open) {
       setReason("");
@@ -195,7 +212,7 @@ export function PublishRunModal({ open, onOpenChange, runId, runName, onDone }: 
       const result = await payslipsApi.publishRun(runId, reason.trim());
       const total = (result.published ?? 0) + (result.published_manually ?? 0);
       toast.success(total ? `${total} payslip${total === 1 ? "" : "s"} published. Employees are notified.` : "Nothing to publish: every payslip of this run is already published.");
-      onOpenChange(false);
+      closeAfterSave(onDirtyChange, () => onOpenChange(false));
       onDone();
     } catch (err) {
       setError(err);
@@ -332,8 +349,9 @@ export function PayslipsList() {
   const [zipBusy, setZipBusy] = useState(false);
   const [resendBusy, setResendBusy] = useState(false);
 
+  const [publishDirty, setPublishDirty] = useState(false);
   const viewer = useModalRoute("payslip");
-  const publishRoute = useModalRoute("publish", { keys: ["run"] });
+  const publishRoute = useModalRoute("publish", { keys: ["run"], dirty: publishDirty });
 
   const set = <K extends keyof Filters>(key: K, value: Filters[K]) => {
     setFilters((f) => ({ ...f, [key]: value }));
@@ -388,16 +406,17 @@ export function PayslipsList() {
     }
   };
 
-  const resendSelected = async () => {
+  /** Resend one by one: successes stay done, failures are listed with Retry (3.8 §8 partial failure). */
+  const resendIds = async (ids: number[]) => {
     setResendBusy(true);
     const failed: { id: number; message: string }[] = [];
     let sent = 0;
-    for (const row of resendable) {
+    for (const id of ids) {
       try {
-        await payslipsApi.resend(row.id);
+        await payslipsApi.resend(id);
         sent += 1;
       } catch (e) {
-        failed.push({ id: row.id, message: errorText(e) });
+        failed.push({ id, message: errorText(e) });
       }
     }
     setResendBusy(false);
@@ -407,6 +426,7 @@ export function PayslipsList() {
     setSelected(new Set());
     void reload();
   };
+  const resendSelected = () => resendIds(resendable.map((r) => r.id));
 
   const name = (row: PayslipSummary) => row.employee?.name ?? (row.employee_id ? `Employee #${row.employee_id}` : "—");
 
@@ -555,6 +575,11 @@ export function PayslipsList() {
               </li>
             ))}
           </ul>
+          {lastResult.failed.length > 0 && canPublish && (
+            <Button variant="secondary" size="sm" className="mt-2 min-h-[44px]" loading={resendBusy} onClick={() => void resendIds(lastResult.failed.map((f) => f.id))}>
+              <RefreshCw className="h-4 w-4" aria-hidden /> Retry failed
+            </Button>
+          )}
         </Notice>
       )}
 
@@ -618,6 +643,7 @@ export function PayslipsList() {
           runId={publishRunId}
           runName={publishRunName ? runLabel(publishRunName) : undefined}
           onDone={() => void reload()}
+          onDirtyChange={setPublishDirty}
         />
       )}
       {canPublish && (

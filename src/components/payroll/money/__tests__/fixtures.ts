@@ -11,6 +11,7 @@ import type {
   BankAccountDetail,
   BankChangeRequest,
   FundingAccount,
+  FundingAccountOption,
   PaymentBatchDetail,
   PaymentInstruction,
   ReconciliationMatch,
@@ -266,6 +267,24 @@ export function funding(overrides: Partial<FundingAccount> = {}): FundingAccount
     row_version: 2,
     created_at: "2026-10-01T10:00:00",
     updated_at: null,
+    ...overrides,
+  };
+}
+
+/** One row of GET /payroll/funding-accounts/options (services/funding_accounts.py `option_json`). */
+export function fundingOption(overrides: Partial<FundingAccountOption> = {}): FundingAccountOption {
+  return {
+    id: 5,
+    name: "Payroll — HDFC",
+    currency: "INR",
+    purpose: "PAYROLL",
+    legal_entity: { id: 1, name: "Acme India Pvt Ltd", code: "ACME-IN" },
+    account_masked: "••••7788",
+    bank_name: "HDFC Bank",
+    status: "ACTIVE",
+    active: true,
+    sandbox: false,
+    is_signatory: true,
     ...overrides,
   };
 }

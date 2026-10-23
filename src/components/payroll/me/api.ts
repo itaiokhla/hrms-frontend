@@ -19,13 +19,17 @@ import type {
   EmployeeCompensation,
   ListPage,
   Loan,
+  LoanPolicyPreview,
   MyBankAccount,
   MyBankChange,
   MyPayslip,
   MyPayslipDetail,
   MyPaymentsResponse,
+  MyPayslipQuestion,
   PayDocumentDto,
+  PayrollPreferences,
   PayslipPasswordStatus,
+  PayslipQuestionResult,
   UploadLimits,
 } from "./types";
 
@@ -76,6 +80,19 @@ export async function saveFile(url: string, fallbackName: string): Promise<void>
 }
 
 export const meApi = {
+  /* own payroll context (routes/me_payroll.py): settings resolved for the caller's own employee */
+  preferences: () => payrollApi.get<PayrollPreferences>("/me/payroll/preferences"),
+  loanPolicy: () => payrollApi.get<LoanPolicyPreview>("/me/payroll/loan-policy"),
+
+  /* payslip questions (routes/payslip_queries.py): own published payslips and own questions only */
+  askQuestion: (documentId: number, question: string, idempotencyKey?: string) =>
+    payrollApi.post<PayslipQuestionResult>(`/me/payroll/payslips/${documentId}/questions`, { question }, idempotencyKey ? { idempotencyKey } : undefined),
+  questions: (params: { status?: string | null; document_id?: number | null; skip?: number; limit?: number } = {}) =>
+    payrollApi.get<ListPage<MyPayslipQuestion>>("/me/payroll/payslip-questions", { params: cleanParams(params) }),
+  question: (id: number | string) => payrollApi.get<MyPayslipQuestion>(`/me/payroll/payslip-questions/${encodeURIComponent(String(id))}`),
+  closeQuestion: (id: number, rowVersion?: number) =>
+    payrollApi.post<PayslipQuestionResult>(`/me/payroll/payslip-questions/${id}/close`, rowVersion ? { row_version: rowVersion } : {}),
+
   /* payslips (routes/payslips.py) */
   payslips: (params: { year?: number | null; skip?: number; limit?: number } = {}) =>
     payrollApi.get<ListPage<MyPayslip>>("/me/payroll/payslips", { params: cleanParams(params) }),

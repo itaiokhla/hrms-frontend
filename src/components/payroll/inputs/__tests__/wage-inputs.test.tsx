@@ -128,12 +128,14 @@ describe("Wage Inputs page", () => {
     expect(approve).not.toBeDisabled();
   });
 
-  it("says arrears proposals are not available yet", async () => {
-    signIn(EDITOR);
+  it("opens the arrears tab from ?tab=arrears and lists proposals from the corrections API", async () => {
+    signIn(me({ [P.PAYROLL_INPUTS_READ]: ["COMPANY"], [P.PAYROLL_RUN_READ]: ["COMPANY"] }));
     routes();
     mockSearch = new URLSearchParams("tab=arrears");
     render(<WageInputsPage />);
-    expect(await screen.findByText("Arrears proposals are not available yet")).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Arrears proposals" })).toHaveAttribute("aria-selected", "true");
+    await waitFor(() => expect(mockGet).toHaveBeenCalledWith("/payroll/arrears-proposals", { params: { skip: 0, limit: 50 } }));
+    expect(screen.queryByText(/not available yet/)).not.toBeInTheDocument();
   });
 });
 

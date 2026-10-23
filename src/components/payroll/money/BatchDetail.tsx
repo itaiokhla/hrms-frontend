@@ -25,7 +25,6 @@ import { InstructionSheet, isFailed, isOverdue } from "./Instructions";
 import { BatchStatus } from "./PayoutBatches";
 import { fetchFile, paymentsApi, saveFile } from "./api";
 import {
-  ConflictBanner,
   DetailGate,
   EvidenceNote,
   Hash,
@@ -33,11 +32,15 @@ import {
   METHOD_LABELS,
   Meta,
   Notice,
+  PaymentErrorBanner,
   PaymentsNav,
   ReasonModal,
+  STATUS_REASON_TEXT,
   SandboxBadge,
+  ValueDateNotice,
   WorkspaceHeader,
-  errorText,
+  humanize,
+  paymentErrorCode,
   useEmployeeDirectory,
   useFundingAccounts,
   useUserNames,
@@ -166,7 +169,11 @@ function FilePanel({ batch, canDownload, canGenerate, onChanged }: { batch: Paym
           )}
         </div>
       </div>
-      {error ? <p role="alert" className="mt-3 text-sm text-danger">{errorText(error)}</p> : null}
+      {error ? (
+        <div className="mt-3">
+          <PaymentErrorBanner error={error} onReload={onChanged} />
+        </div>
+      ) : null}
       {file ? (
         <dl className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <Meta label="File">
@@ -289,7 +296,7 @@ function ActionBar({ batch, onChanged }: { batch: PaymentBatchDetail; onChanged:
   const canPrepare = can(me, P.PAYROLL_PAYMENT_PREPARE);
   const canSubmit = can(me, P.PAYROLL_PAYMENT_SUBMIT) && !isPreparer;
   const account = funding.byId(batch.funding_account_id);
-  const knownSignatory = account ? account.signatory_user_ids.includes(myId ?? -1) : null;
+  const knownSignatory = account ? account.is_signatory : null;
 
   const releasable = (batch.method === "BANK_FILE" && batch.status === "FILE_GENERATED") || (batch.method === "API" && batch.status === "APPROVED");
   const releaseOpen = release.open && release.param("batch") === String(batch.id);
@@ -315,8 +322,9 @@ function ActionBar({ batch, onChanged }: { batch: PaymentBatchDetail; onChanged:
       releaseKey.current = newIdempotencyKey();
       onChanged();
     } catch (err) {
-      toast.error(errorText(err));
-      if (isConflict(err)) onChanged();
+      // Keep the reason on the page after the dialog closes (expired FX quote, not a signatory, conflict).
+      setError(err);
+      if (isConflict(err) && paymentErrorCode(err) !== "FX_QUOTE_EXPIRED") onChanged();
       throw err;
     }
   };
@@ -356,8 +364,7 @@ function ActionBar({ batch, onChanged }: { batch: PaymentBatchDetail; onChanged:
 
   return (
     <div className="space-y-3">
-      <ConflictBanner error={error} onReload={onChanged} />
-      {error && !isConflict(error) ? <p role="alert" className="text-sm text-danger">{errorText(error)}</p> : null}
+      <PaymentErrorBanner error={error} onReload={onChanged} />
       {batch.bank_changes.length > 0 && UNSENT.includes(batch.status) && (
         <div className="space-y-2">
           <BankChangeWarnings items={batch.bank_changes} />
@@ -462,7 +469,8 @@ export function BatchDetailPage({ id }: { id: string }) {
                   The file was uploaded to the bank by a person. Payments settle only when the bank statement is imported in Reconciliation.
                 </Notice>
               )}
-              {data.status_reason && <Notice tone="info" title="Reason">{data.status_reason}</Notice>}
+              {UNSENT.includes(data.status) && <ValueDateNotice warnings={data.value_date_warnings} valueDate={data.value_date} />}
+              {data.status_reason && <Notice tone="info" title="Reason">{STATUS_REASON_TEXT[data.status_reason] ?? humanize(data.status_reason)}</Notice>}
               <dl className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 <Meta label="Run">{data.run_id ? `#${data.run_id}` : "—"}</Meta>
                 <Meta label="Prepared by">{userName(data.prepared_by_user_id)}</Meta>

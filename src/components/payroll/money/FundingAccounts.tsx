@@ -374,7 +374,10 @@ function EditFundingForm({ account, onSaved }: { account: FundingAccount; onSave
     setBusy(true);
     setError(null);
     try {
-      await fundingApi.update(account.id, { name: name.trim(), purpose, signatory_user_ids: signatories, provider_profile: sandbox ? "SANDBOX" : null }, account.row_version);
+      // PATCH semantics: null leaves a field unchanged, so turning SANDBOX off sends "" (clears it).
+      const changes: Partial<FundingAccountInput> = { name: name.trim(), purpose, signatory_user_ids: signatories };
+      if (sandbox !== account.sandbox) changes.provider_profile = sandbox ? "SANDBOX" : "";
+      await fundingApi.update(account.id, changes, account.row_version);
       toast.success("Funding account saved");
       onSaved();
     } catch (err) {

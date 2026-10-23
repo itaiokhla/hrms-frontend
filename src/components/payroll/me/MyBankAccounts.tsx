@@ -24,6 +24,7 @@ import { P } from "@/lib/permissions.generated";
 import { AddBankAccountModal, AddBankAccountWizard } from "./AddBankAccount";
 import { meApi } from "./api";
 import { countryName } from "./bankFormat";
+import { usePayrollPreferences } from "./preferences";
 import { canSelf, ConflictBanner, DetailGate, ErrorSummary, fieldErrors, LinkButton, MeChip, MeHeader, Notice, timeLeft } from "./shared";
 import type { MyBankAccount, MyBankChange } from "./types";
 
@@ -55,12 +56,18 @@ function allocationText(a: MyBankAccount): string | null {
 export function MyBankAccounts() {
   const { me } = useCan();
   const reduceMotion = useReducedMotion();
-  const canEdit = canSelf(me, P.PAYROLL_BANK_DETAILS_EDIT);
+  const preferences = usePayrollPreferences();
+  const policy = preferences.prefs?.bank_accounts;
+  // Employer switched self-service off: HR maintains the accounts (the server refuses changes too).
+  const selfServiceOff = policy?.self_service_enabled === false;
+  const canEdit = canSelf(me, P.PAYROLL_BANK_DETAILS_EDIT) && !selfServiceOff;
   const [dirty, setDirty] = useState(false);
   const add = useModalRoute("add-bank", { keys: [], dirty });
   const accounts = useApi(() => meApi.bankAccounts(), []);
   const changes = useApi(() => meApi.bankChanges(), []);
-  const currencyHint = useApi(() => meApi.claimTypes(), [], { enabled: !!me?.employee });
+  // The pay currency comes from the preferences; the claim-types hint is only a fallback without them.
+  const currencyHint = useApi(() => meApi.claimTypes(), [], { enabled: !!me?.employee && !preferences.loading && !preferences.prefs?.pay_group });
+  const payCurrency = preferences.prefs?.pay_group?.currency ?? currencyHint.data?.currency;
   const now = useNow();
 
   const items = accounts.data?.items;
@@ -86,6 +93,11 @@ export function MyBankAccounts() {
           )
         }
       />
+      {selfServiceOff && canSelf(me, P.PAYROLL_BANK_DETAILS_EDIT) && (
+        <Notice tone="info" title="HR updates your bank account" className="mb-5">
+          Your employer doesn&apos;t take bank changes here. Contact HR to add or change the account your salary goes to.
+        </Notice>
+      )}
       {open.length > 0 && (
         <div className="mb-5 space-y-3">
           {open.map((c) => (
@@ -147,7 +159,9 @@ export function MyBankAccounts() {
           open={add.open}
           onOpenChange={add.onOpenChange}
           accounts={items ?? []}
-          defaultCurrency={currencyHint.data?.currency}
+          defaultCurrency={payCurrency}
+          defaultCountry={preferences.prefs?.legal_entity?.country_code ?? undefined}
+          policy={policy}
           onDirtyChange={setDirty}
           onDone={() => {
             setDirty(false);
@@ -429,8 +443,10 @@ export function AddBankAccountPage() {
   const router = useRouter();
   const { me } = useCan();
   const accounts = useApi(() => meApi.bankAccounts(), []);
-  const currencyHint = useApi(() => meApi.claimTypes(), [], { enabled: !!me?.employee });
-  if (!canSelf(me, P.PAYROLL_BANK_DETAILS_EDIT)) {
+  const preferences = usePayrollPreferences();
+  const policy = preferences.prefs?.bank_accounts;
+  const currencyHint = useApi(() => meApi.claimTypes(), [], { enabled: !!me?.employee && !preferences.loading && !preferences.prefs?.pay_group });
+  if (!canSelf(me, P.PAYROLL_BANK_DETAILS_EDIT) || policy?.self_service_enabled === false) {
     return (
       <Card className="mx-auto mt-10 max-w-lg">
         <EmptyState icon={<Landmark />} title="You can't change bank details here" description="Ask HR to update your bank account." />
@@ -451,7 +467,9 @@ export function AddBankAccountPage() {
         ) : (
           <AddBankAccountWizard
             accounts={accounts.data?.items ?? []}
-            defaultCurrency={currencyHint.data?.currency}
+            defaultCurrency={preferences.prefs?.pay_group?.currency ?? currencyHint.data?.currency}
+            defaultCountry={preferences.prefs?.legal_entity?.country_code ?? undefined}
+            policy={policy}
             onCancel={() => router.push("/me/bank-accounts")}
             onDone={() => router.push("/me/bank-accounts")}
           />

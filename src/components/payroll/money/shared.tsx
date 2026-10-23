@@ -8,13 +8,17 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react
 
 import { useCan } from "@/components/access/Can";
 import { cn } from "@/lib/cn";
+import { fmtDate } from "@/lib/format";
 import { useApi } from "@/lib/hooks";
 import { canAny, can } from "@/lib/access";
 import type { StatusTone } from "@/lib/payroll/labels";
 import { P } from "@/lib/permissions.generated";
 
+import { ConflictBanner, Notice, PAYROLL_ERROR_WORDING, errorText, errorWording, payrollErrorCode } from "@/components/payroll/inputs/shared";
+import { isConflict } from "@/lib/payroll/api";
+
 import { fundingApi, moneyLookups } from "./api";
-import type { FundingAccount, LegalEntityOption, UserOption } from "./types";
+import type { FundingAccountOption, FundingChoice, LegalEntityOption, UserOption } from "./types";
 
 // Page shell, banners, gates and modals shared with the other payroll areas (committed in eae8c2a).
 export {
@@ -127,6 +131,71 @@ export function EvidenceNote({ channel, evidence, status }: { channel: string | 
   return null;
 }
 
+/* ------------------------------------------------------------------ value date (EC-PAY-10) */
+
+export const VALUE_DATE_WARNINGS: Record<string, string> = {
+  VALUE_DATE_SHIFTED: "The date falls on a weekend or bank holiday, so it moved to the next business day.",
+  VALUE_DATE_AFTER_PAY_DATE: "The money arrives after the pay date. Tell the employees, or choose an earlier date if the bank allows it.",
+};
+
+/** Value-date warnings from the server (never computed here). Nothing when there are none. */
+export function ValueDateNotice({ warnings, valueDate, requested }: { warnings: string[] | null | undefined; valueDate?: string | null; requested?: string | null }) {
+  const list = (warnings ?? []).filter(Boolean);
+  if (!list.length) return null;
+  const late = list.includes("VALUE_DATE_AFTER_PAY_DATE");
+  const moved = requested && valueDate && requested !== valueDate ? ` (${fmtDate(requested)} → ${fmtDate(valueDate)})` : valueDate ? ` (${fmtDate(valueDate)})` : "";
+  return (
+    <Notice tone="warning" title={late ? `Value date is after the pay date${moved}` : `Value date moved${moved}`}>
+      <ul className="mt-1 list-disc ps-5">
+        {list.map((w) => (
+          <li key={w}>{VALUE_DATE_WARNINGS[w] ?? humanize(w)}</li>
+        ))}
+      </ul>
+    </Notice>
+  );
+}
+
+/* ------------------------------------------------------------------ release / FX errors */
+
+/**
+ * Codes of release and approval refusals, worded for the person (3.7 EC-PAY-20, funding signatories).
+ * The wording lives once in the shared PAYROLL_ERROR_WORDING (used by ConflictBanner in every area).
+ */
+export const PAYMENT_ERROR_TEXT: Record<string, string> = Object.fromEntries(
+  (["FX_QUOTE_EXPIRED", "FUNDING_SIGNATORY", "NOT_A_SIGNATORY", "FX_RATE_MISSING"] as const).map((code) => [code, PAYROLL_ERROR_WORDING[code].text ?? ""]),
+);
+
+export const paymentErrorCode = payrollErrorCode;
+
+/**
+ * Error banner for payment actions: known refusals (expired FX quote, not a signatory, cancelled batch,
+ * reversal hold, value date in the past…) in plain words whatever their status, other 409s as the shared
+ * conflict banner, anything else as an inline error.
+ */
+export function PaymentErrorBanner({ error, onReload }: { error: unknown; onReload?: () => void }) {
+  if (!error) return null;
+  const wording = errorWording(error);
+  if (wording?.text) {
+    return (
+      <Notice tone="danger" title={wording.title}>
+        {wording.text}
+      </Notice>
+    );
+  }
+  if (isConflict(error)) return <ConflictBanner error={error} onReload={onReload} />;
+  return (
+    <p role="alert" className="text-sm text-danger">
+      {errorText(error)}
+    </p>
+  );
+}
+
+/** Instruction hold reasons that need a sentence, not a code. */
+export const STATUS_REASON_TEXT: Record<string, string> = {
+  FX_RATE_MISSING: "Held: no usable exchange rate for the account currency (re-quoted automatically once a rate exists).",
+  FX_QUOTE_EXPIRED: "Held: the exchange-rate quote expired; the payment is re-quoted on the next batch.",
+};
+
 /* ------------------------------------------------------------------ risk flags and reasons */
 
 export const FLAG_LABELS: Record<string, string> = {
@@ -219,20 +288,53 @@ export function useEntities(): { entities: LegalEntityOption[]; name: (id: numbe
   return { entities, allowed, name: (id) => (id === null || id === undefined ? "—" : map.get(id) ?? `Entity #${id}`) };
 }
 
+/** Who may read the masked funding-account options (services/funding_accounts.py OPTION_PERMISSIONS). */
+export const FUNDING_OPTION_PERMS = [
+  P.PAYROLL_PAYMENT_PREPARE,
+  P.PAYROLL_PAYMENT_APPROVE,
+  P.PAYROLL_PAYMENT_SUBMIT,
+  P.PAYROLL_PAYMENT_RECONCILE,
+  P.PAYROLL_FUNDING_ACCOUNTS_MANAGE,
+];
+
+export function fundingChoice(o: FundingAccountOption): FundingChoice {
+  return {
+    id: o.id,
+    legal_entity_id: o.legal_entity.id,
+    legal_entity_name: o.legal_entity.name,
+    name: o.name,
+    currency: o.currency,
+    account_masked: o.account_masked,
+    bank_name: o.bank_name,
+    status: o.status,
+    sandbox: o.sandbox,
+    is_signatory: o.is_signatory,
+  };
+}
+
 /**
- * Funding accounts in scope. The list needs payroll:funding_accounts:manage; preparers and
- * reconcilers without it see "Funding account #id" (reported: no read-only list endpoint).
+ * Funding accounts the viewer's payment permissions cover, from the masked read-only options list
+ * (GET /payroll/funding-accounts/options, inactive ones included so history keeps its names). Pickers
+ * offer the active ones only. An account outside the viewer's scope stays "Funding account #id".
  */
-export function useFundingAccounts(): { accounts: FundingAccount[]; allowed: boolean; loading: boolean; label: (id: number | null | undefined) => string; byId: (id: number | null | undefined) => FundingAccount | undefined } {
+export function useFundingAccounts(): {
+  accounts: FundingChoice[];
+  allowed: boolean;
+  loading: boolean;
+  label: (id: number | null | undefined) => string;
+  byId: (id: number | null | undefined) => FundingChoice | undefined;
+} {
   const { me } = useCan();
-  const allowed = can(me, P.PAYROLL_FUNDING_ACCOUNTS_MANAGE);
-  const { data, loading } = useApi(() => fundingApi.list(), [], { enabled: allowed });
-  const accounts = useMemo(() => data?.items ?? [], [data]);
+  const permitted = canAny(me, FUNDING_OPTION_PERMS);
+  const { data, error, loading } = useApi(() => fundingApi.options({ include_inactive: true }), [], { enabled: permitted });
+  // A refused or failed list degrades like no access: callers offer the ids they already know.
+  const allowed = permitted && !(error && !data);
+  const accounts = useMemo(() => (data?.items ?? []).map(fundingChoice), [data]);
   const map = useMemo(() => new Map(accounts.map((a) => [a.id, a])), [accounts]);
   return {
     accounts,
     allowed,
-    loading: allowed && loading,
+    loading: permitted && loading,
     byId: (id) => (id === null || id === undefined ? undefined : map.get(id)),
     label: (id) => {
       if (id === null || id === undefined) return "—";

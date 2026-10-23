@@ -132,7 +132,7 @@ describe("Approve bank change (deep link)", () => {
     fireEvent.click(within(dialog).getByRole("checkbox", { name: /checked the risk flags/ }));
     fireEvent.click(within(dialog).getByRole("checkbox", { name: /Skip the cooling-off period/ }));
     fireEvent.click(approve);
-    expect(await within(dialog).findByText(/Say why the waiting period is skipped/)).toBeInTheDocument();
+    expect((await within(dialog).findAllByText(/Say why the waiting period is skipped/)).length).toBeGreaterThan(0);
     fireEvent.change(within(dialog).getByLabelText(/Why skip it/), { target: { value: "Confirmed by phone" } });
     fireEvent.click(approve);
     await waitFor(() => expect(mockPost).toHaveBeenCalledWith("/payroll/bank-change-requests/77/approve", { waive_cooling_off_reason: "Confirmed by phone" }));
@@ -147,7 +147,7 @@ describe("Approve bank change (deep link)", () => {
     const dialog = await screen.findByRole("dialog", { name: "Bank change request #77" });
     fireEvent.click(await within(dialog).findByRole("button", { name: "Reject…" }));
     fireEvent.click(within(dialog).getByRole("button", { name: "Reject change" }));
-    expect(await within(dialog).findByText(/Give a reason/)).toBeInTheDocument();
+    expect((await within(dialog).findAllByText(/Give a reason/)).length).toBeGreaterThan(0);
     fireEvent.change(within(dialog).getByLabelText(/^Reason/), { target: { value: "Employee did not request this" } });
     fireEvent.click(within(dialog).getByRole("button", { name: "Reject change" }));
     await waitFor(() => expect(mockPost).toHaveBeenCalledWith("/payroll/bank-change-requests/77/reject", { remarks: "Employee did not request this" }));

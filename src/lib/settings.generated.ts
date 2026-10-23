@@ -5801,8 +5801,8 @@ export const POLICY_TYPES: PolicyTypeMeta[] = [
         "name": "rate_formula",
         "kind": "formula",
         "max_length": 2000,
-        "default": "SUM_TAG_RATE(\"OT_BASE\") / period.basis_days / emp.standard_hours_per_day",
-        "help": "Hourly base rate from full-period rates, so LOP does not lower it.",
+        "default": "SUM_TAG_HOURLY(\"OT_BASE\")",
+        "help": "Hourly base rate from full-period rates, so LOP does not lower it. SUM_TAG_HOURLY divides period amounts by the basis days and standard hours, per-day rates by standard hours, and uses per-hour rates as they are.",
         "legal_sensitivity": "NONE"
       },
       {

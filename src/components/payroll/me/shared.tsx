@@ -107,7 +107,7 @@ interface LocalStatus {
 
 /**
  * Vocabularies the backend has no generated state machine for (bank change requests, document
- * requests, payslip markers). Same look as `StatusChip`; an unknown code is neutral, never success.
+ * requests, payslip questions, payslip markers). Same look as `StatusChip`; an unknown code is neutral, never success.
  */
 export const ME_VOCABULARIES: Record<string, Record<string, LocalStatus>> = {
   bank_change: {
@@ -122,6 +122,11 @@ export const ME_VOCABULARIES: Record<string, Record<string, LocalStatus>> = {
     APPROVED: { label: "Approved", tone: "info", glossary: "Approved; the document is being prepared." },
     ISSUED: { label: "Issued", tone: "success" },
     REJECTED: { label: "Rejected", tone: "danger" },
+  },
+  payslip_question: {
+    OPEN: { label: "Waiting for an answer", tone: "info", glossary: "Payroll has your question and will answer it here." },
+    ANSWERED: { label: "Answered", tone: "success", glossary: "Payroll answered. Mark it as resolved, or ask a new question if something is still unclear." },
+    CLOSED: { label: "Closed", tone: "neutral" },
   },
   payslip_marker: {
     NEW: { label: "New", tone: "primary", glossary: "You haven't opened this payslip yet." },

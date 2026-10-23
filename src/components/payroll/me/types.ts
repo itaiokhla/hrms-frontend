@@ -12,6 +12,9 @@
  * - bank accounts: routes/bank_accounts.py self routes = services/bank_accounts.py `serialize_account(for_self)`,
  *   `serialize_change_request(for_self)`, `_change_result(for_self)`, `_evidence_result`
  * - compensation: routes/compensation.py `employee_compensation` (types reused from the compensation area)
+ * - preferences: routes/me_payroll.py `my_payroll_preferences` = services/self_service.py `preferences`
+ * - loan policy: routes/me_payroll.py `my_loan_policy` = services/loans.py `policy_preview`
+ * - payslip questions: routes/payslip_queries.py = services/payslip_queries.py `query_json(as_staff=False)`
  * - loans / claims: types reused from the inputs area (services/loans.py `serialize`, services/claims.py
  *   `serialize`); claim types = services/claims.py `claim_types`
  *
@@ -72,6 +75,12 @@ export interface PayslipLine {
   statutory: boolean;
   fixture: boolean;
   ytd?: string | null;
+  /**
+   * The engine's plain-language "Why this amount?" for an employee-visible line (services/payslips.py
+   * `employee_explanation`: whitespace-normalised, at most 500 characters). Absent on payslips generated
+   * before explanations were frozen into the content, and null when the engine recorded none.
+   */
+  explanation?: string | null;
 }
 
 export interface PayslipPayment {
@@ -363,3 +372,117 @@ export interface UploadLimits {
   max_upload_bytes: number;
   kinds: Record<string, { max_bytes?: number; max_files?: number; max_rows?: number; mime_types: string[] }>;
 }
+
+/* ------------------------------------------------------------------ preferences (GET /me/payroll/preferences) */
+
+/**
+ * Settings resolved by the server for the caller's own employee. A value that did not resolve is null
+ * and its key is listed in `unavailable`: the page then says so instead of assuming a default.
+ */
+export interface PayrollPreferences {
+  employee_id: number;
+  as_of: string;
+  time_zone: string | null;
+  legal_entity: { id: number; name: string; country_code: string | null } | null;
+  payslip: {
+    queries_enabled: boolean | null;
+    pdf_protection: "NONE" | "EMPLOYEE_SECRET" | null;
+  };
+  pay_group: {
+    id: number;
+    code: string;
+    name: string;
+    currency: string;
+    next_pay_date: string | null;
+    next_period: { id: number; start: string; end: string; status: string } | null;
+  } | null;
+  bank_accounts: {
+    self_service_enabled: boolean | null;
+    change_requires_approval: boolean | null;
+    cooling_off_hours: number | null;
+    verification_methods: string[] | null;
+    split_payments_enabled: boolean | null;
+    max_accounts_per_payee: number | null;
+    /** 1 while split payments are off; the configured maximum when on; null when unknown. */
+    effective_max_accounts: number | null;
+    /** ISO 3166 codes, or null: no setting restricts the country (any country is accepted). */
+    allowed_countries: string[] | null;
+  };
+  unavailable: string[];
+}
+
+/* ------------------------------------------------------------------ loan policy preview (GET /me/payroll/loan-policy) */
+
+export interface LoanPolicyRef {
+  name: string | null;
+  version: number | null;
+  effective_from: string | null;
+}
+
+/** One kind (loan or advance) of services/loans.py `policy_preview`. Maximums are null when not computable. */
+export interface LoanKindPolicy<L, U> {
+  enabled: boolean;
+  /** "RESOLVED" when a policy applies; anything else means no usable policy (limits/usage are null). */
+  policy_status: string | null;
+  policy: LoanPolicyRef | null;
+  limits: L | null;
+  usage: U | null;
+}
+
+export interface LoanLimits {
+  max_amount_formula: string | null;
+  max_amount: Money | null;
+  max_tenure_months: number | null;
+  interest_rate_percent: string | null;
+  interest_method: string | null;
+  max_instalment_percent_of_net: string | null;
+  min_service_months: number | null;
+  max_active_loans: number | null;
+  recover_balance_on_exit: boolean | null;
+}
+
+export interface AdvanceLimits {
+  max_percent_of_monthly_net: string | null;
+  max_amount: Money | null;
+  recover_in_runs: number | null;
+  max_per_year: number | null;
+}
+
+export interface LoanPolicyPreview {
+  employee_id: number;
+  as_of: string;
+  currency: string;
+  protected_net_percent: string | null;
+  loan: LoanKindPolicy<LoanLimits, { open: number; service_months: number | null }>;
+  advance: LoanKindPolicy<AdvanceLimits, { open: number; this_year: number }>;
+}
+
+/* ------------------------------------------------------------------ payslip questions */
+
+export type PayslipQuestionStatus = "OPEN" | "ANSWERED" | "CLOSED";
+
+/** services/payslip_queries.py `query_json(as_staff=False)`: never staff user ids. */
+export interface MyPayslipQuestion {
+  id: number;
+  document_id: number;
+  payslip: { id: number; number: string | null; version: number; period_label: string | null; period_start: string | null; period_end: string | null } | null;
+  question: string;
+  status: PayslipQuestionStatus | string;
+  answer: string | null;
+  answered_at: string | null;
+  closed_at: string | null;
+  created_at: string | null;
+  row_version: number;
+}
+
+/** routes/payslip_queries.py `_result`. */
+export interface PayslipQuestionResult {
+  id: number;
+  document_id: number;
+  status: string;
+  row_version: number;
+}
+
+/** Limits from app/models/payslip_queries.py (QUESTION_MAX / ANSWER_MAX). */
+export const QUESTION_MAX = 2000;
+export const ANSWER_MAX = 4000;

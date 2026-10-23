@@ -14,13 +14,15 @@ import { Button } from "@/components/ui/button";
 import { EmptyState, ErrorState } from "@/components/ui/layout";
 import { Card, Skeleton } from "@/components/ui/primitives";
 import { cn } from "@/lib/cn";
-import { fmtDate } from "@/lib/format";
+import { fmtDate, todayISO } from "@/lib/format";
 import { useApi } from "@/lib/hooks";
 import { percentChange } from "@/lib/payroll/labels";
 import { P } from "@/lib/permissions.generated";
 
 import { meApi } from "./api";
 import { downloadPayslip } from "./MyPayslips";
+import { WhyThisAmount } from "./PayslipDocument";
+import { usePayrollPreferences } from "./preferences";
 import { canSelf, HonestyBadge, isCurrentPayslip, LinkButton, MeChip, MeHeader, Notice, payslipMarkers, SelfServiceLinks, shareOf } from "./shared";
 import type { EmployeeCompensation, MyInstruction, MyPaymentPeriod, MyPayslipDetail, PayslipLine } from "./types";
 
@@ -47,12 +49,17 @@ export function MySalary() {
     const runId = latest.data?.run_id;
     return runId ? payments.data?.items.find((p) => p.run_id === runId) : undefined;
   }, [latest.data, payments.data]);
+  // The pay calendar's next pay date (preferences: the first stored period of the employee's pay group
+  // paying today or later, in the entity's time zone); otherwise a payment already scheduled after today.
+  const { prefs } = usePayrollPreferences();
+  const scheduled = useMemo(() => nextPayDate(payments.data?.items ?? [], todayISO()), [payments.data]);
+  const nextPay = prefs?.pay_group?.next_pay_date ? { date: prefs.pay_group.next_pay_date, source: "calendar" as const } : scheduled ? { date: scheduled, source: "payment" as const } : null;
 
   return (
     <div className="mx-auto max-w-3xl">
       <MeHeader title="My Salary" description="Your latest pay, how it adds up, and when it reaches your account." />
       <div className="space-y-5">
-        {canSlips && <LatestPay list={list} latest={latest} period={period} />}
+        {canSlips && <LatestPay list={list} latest={latest} period={period} nextPay={nextPay} />}
         {canPackage && <MyPackage state={pkg} />}
         <SelfServiceLinks />
       </div>
@@ -62,7 +69,17 @@ export function MySalary() {
 
 type ApiState<T> = { data: T | undefined; error: { message: string } | null; loading: boolean; reload: () => unknown };
 
-function LatestPay({ list, latest, period }: { list: ApiState<{ items: { id: number }[] }>; latest: ApiState<MyPayslipDetail>; period?: MyPaymentPeriod }) {
+/**
+ * Fallback next pay date: the earliest scheduled payment after today (used when the pay calendar has
+ * no upcoming period or the preferences could not be read). Nothing is estimated from a guessed schedule.
+ */
+export function nextPayDate(periods: Pick<MyPaymentPeriod, "pay_date">[], today: string): string | null {
+  const upcoming = periods.map((p) => p.pay_date).filter((d): d is string => !!d && d.slice(0, 10) > today);
+  upcoming.sort();
+  return upcoming[0] ?? null;
+}
+
+function LatestPay({ list, latest, period, nextPay }: { list: ApiState<{ items: { id: number }[] }>; latest: ApiState<MyPayslipDetail>; period?: MyPaymentPeriod; nextPay: { date: string; source: "calendar" | "payment" } | null }) {
   if (list.error && !list.data) return <Card><ErrorState message={list.error.message} onRetry={list.reload} /></Card>;
   if ((list.loading && !list.data) || (list.data?.items.length && latest.loading && !latest.data)) {
     return (
@@ -144,7 +161,13 @@ function LatestPay({ list, latest, period }: { list: ApiState<{ items: { id: num
       )}
       <p className="mt-4 flex items-start gap-2 text-sm text-muted-foreground">
         <CalendarClock className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
-        Your next pay date appears here once your employer publishes the pay calendar.
+        {nextPay ? (
+          <span>
+            Next pay date: <span className="font-medium text-foreground">{fmtDate(nextPay.date)}</span> {nextPay.source === "calendar" ? "(pay calendar)" : "(scheduled)"}
+          </span>
+        ) : (
+          "No next pay date is scheduled yet. It appears here once your employer sets up the next pay period."
+        )}
       </p>
       <div className="mt-3">
         <Link href="/me/payslips" className="inline-flex min-h-[44px] items-center text-sm font-medium text-primary hover:underline">
@@ -207,7 +230,7 @@ function Expander({ title, total, currency, lines, deduction, note }: { title: s
               <ul>
                 {lines.map((l, i) => (
                   <li key={`${l.code}-${i}`} className="flex items-baseline gap-3 py-1.5 text-sm">
-                    <span className="flex-1">
+                    <div className="min-w-0 flex-1">
                       {l.label}
                       {l.period_ref_label && <span className="text-xs text-muted-foreground"> · for {l.period_ref_label}</span>}
                       {l.fixture && (
@@ -215,7 +238,8 @@ function Expander({ title, total, currency, lines, deduction, note }: { title: s
                           <HonestyBadge>FIXTURE — not law</HonestyBadge>
                         </span>
                       )}
-                    </span>
+                      <WhyThisAmount label={l.label} explanation={l.explanation} />
+                    </div>
                     <MoneyText amount={l.amount} currency={currency} negativeCue={deduction ? false : undefined} />
                   </li>
                 ))}

@@ -222,7 +222,7 @@ export function ClaimsList() {
             empty={
               <EmptyState
                 title={status || claimType ? "No claims match these filters" : "No claims yet"}
-                description="Employees submit claims from My Loans & Claims; payroll staff can submit on their behalf."
+                description="Employees submit claims from My Claims; payroll staff can submit on their behalf."
                 action={canManage && <Button className="min-h-[44px]" onClick={() => modal.openModal()}>New claim</Button>}
               />
             }

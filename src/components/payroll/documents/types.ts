@@ -77,6 +77,11 @@ export interface PayslipLineItem {
   statutory: boolean;
   fixture: boolean;
   ytd?: string | null;
+  /**
+   * The engine's plain-language explanation frozen on the payslip (employee-visible lines only; absent on
+   * payslips generated before explanations were added). The trace itself needs payroll:run:read.
+   */
+  explanation?: string | null;
 }
 
 export interface PayslipContent {
@@ -467,4 +472,63 @@ export interface RunOption {
   run_type: string;
   pay_group: { id: number; code: string; name: string };
   period: { start: string; end: string; pay_date: string } | null;
+}
+
+/* ------------------------------------------------------------------ payslip questions (staff) */
+
+export const PAYSLIP_QUESTION_STATUSES = ["OPEN", "ANSWERED", "CLOSED"] as const;
+
+/** services/payslip_queries.py `query_json(as_staff=True)`. */
+export interface StaffPayslipQuestion {
+  id: number;
+  document_id: number;
+  payslip: { id: number; number: string | null; version: number; period_label: string | null; period_start: string | null; period_end: string | null } | null;
+  question: string;
+  status: "OPEN" | "ANSWERED" | "CLOSED" | string;
+  answer: string | null;
+  answered_at: string | null;
+  closed_at: string | null;
+  created_at: string | null;
+  row_version: number;
+  employee_id: number;
+  employee: EmployeeBrief | null;
+  run_id: number | null;
+  run_employee_id: number | null;
+  legal_entity_id: number;
+  pay_group_id: number | null;
+  asked_by_user_id: number | null;
+  answered_by_user_id: number | null;
+  closed_by_user_id: number | null;
+}
+
+/* ------------------------------------------------------------------ unified download center */
+
+/** services/downloads.py `_center_export_item` / `_center_report_item`. */
+export interface DownloadItem {
+  source: "EXPORT" | "REPORT_EXPORT";
+  id: number;
+  kind: string;
+  title: string;
+  format: string | null;
+  run_id: number | null;
+  report_code: string | null;
+  status: ExportStatus | string;
+  file_name: string | null;
+  bytes: number | null;
+  /** Payslips in a ZIP, rows in a register or report. */
+  items: number | null;
+  error: string | null;
+  created_at: string | null;
+  expires_at: string | null;
+  /** POST here (with /api/v1) for a fresh signed link when `download` has expired. */
+  link_endpoint: string;
+  /** A signed, user-bound five-minute link for a READY file the caller may download; null otherwise. */
+  download: SignedLink | null;
+}
+
+export interface DownloadPage {
+  total: number;
+  skip: number;
+  limit: number;
+  items: DownloadItem[];
 }

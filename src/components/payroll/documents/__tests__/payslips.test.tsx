@@ -108,6 +108,33 @@ describe("Payslips (HR)", () => {
     expect(screen.getByText(/1 skipped/)).toBeInTheDocument();
   });
 
+  it("resends notifications one by one and lists failures with retry", async () => {
+    signIn(PUBLISHER);
+    routes({
+      "/payroll/payslips": {
+        total: 2,
+        items: [
+          payslip({ status: "EMAIL_FAILED", published_at: "2026-11-30T10:00:00Z" }),
+          payslip({ id: 502, status: "PUBLISHED", published_at: "2026-11-30T10:00:00Z", employee: { id: 43, name: "Omar Ali", employee_code: "E0043" } }),
+        ],
+      },
+    });
+    mockPost.mockImplementation((url: string) => (url === "/payroll/payslips/502/resend" ? Promise.reject(serverError()) : Promise.resolve({ document_id: 501, queued: true })));
+    render(<PayslipsPage />);
+    await screen.findAllByText("Omar Ali");
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select all payslips on this page" }));
+    const bar = screen.getByRole("region", { name: "Bulk actions" });
+    // Already-published payslips cannot be published again; they can be resent.
+    expect(within(bar).getByRole("button", { name: /Publish/ })).toBeDisabled();
+    fireEvent.click(within(bar).getByRole("button", { name: /Resend notification 2/ }));
+    expect(await screen.findByText("Payslip #502: Database unavailable")).toBeInTheDocument();
+    expect(mockPost).toHaveBeenCalledWith("/payroll/payslips/501/resend");
+    mockPost.mockResolvedValue({ document_id: 502, queued: true });
+    fireEvent.click(screen.getByRole("button", { name: /Retry failed/ }));
+    await waitFor(() => expect(mockPost.mock.calls.filter(([u]) => u === "/payroll/payslips/502/resend").length).toBe(2));
+    await waitFor(() => expect(screen.queryByText("Payslip #502: Database unavailable")).not.toBeInTheDocument());
+  });
+
   it("opens the viewer from a row click through the modal route", async () => {
     signIn(READER);
     routes({ "/payroll/payslips": { total: 1, items: [payslip()] } });

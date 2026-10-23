@@ -445,6 +445,10 @@ export interface Reversal {
   preview: Record<string, { gross: Money; net: Money; employees: number }>;
   approvals: { step: number; user_id: number; at: string | null; comment: string | null }[];
   requested_by_user_id: number | null;
+  run_employee_ids?: number[];
+  employee_ids?: number[];
+  decision_note?: string | null;
+  finalized_at?: string | null;
   created_at: string | null;
   row_version: number;
 }

@@ -28,18 +28,20 @@ import {
   errorText,
   formatDate,
   formatDateTime,
-  isNotFound,
   NotFoundState,
   useCostCenters,
   useDepartments,
   useEntities,
   usePayGroups,
+  useReportDirty,
 } from "./shared";
 import type { CatalogueReport, ReportColumn, ReportFilters, ReportPreview } from "./types";
 
 const STATUS_SUGGESTIONS = ["FINAL", "APPROVED", "DRAFT", "ALL"];
 const GROUP_BY_LABEL: Record<string, string> = { legal_entity: "Legal entity", department: "Department", cost_center: "Cost center", grade: "Grade" };
 const CURRENCY = /^[A-Z]{3}$/;
+/** services/reports.py PDF_MAX_ROWS: PDF exports stop here and carry a note; CSV/XLSX have every row. */
+const PDF_MAX_ROWS = 5000;
 
 /** What each catalogue group is for (3.8 §5.13). */
 const GROUP_PURPOSE: Record<string, string> = {
@@ -305,7 +307,17 @@ function ConvertedTotals({ preview }: { preview: ReportPreview }) {
 
 /* ------------------------------------------------------------------ export modal (`?modal=report&code=`) */
 
-export function GenerateReportModal({ route, report, onQueued }: { route: ModalRoute; report: CatalogueReport | undefined; onQueued?: () => void }) {
+export function GenerateReportModal({
+  route,
+  report,
+  onQueued,
+  onDirtyChange,
+}: {
+  route: ModalRoute;
+  report: CatalogueReport | undefined;
+  onQueued?: () => void;
+  onDirtyChange?: (dirty: boolean) => void;
+}) {
   const [filters, setFilters] = useState<ReportFilters>({});
   const [format, setFormat] = useState("CSV");
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -313,6 +325,7 @@ export function GenerateReportModal({ route, report, onQueued }: { route: ModalR
   const [busy, setBusy] = useState(false);
   const [queued, setQueued] = useState(false);
   const code = route.param("code");
+  useReportDirty(route.open && !queued && Object.keys(filters).length > 0, onDirtyChange);
   useEffect(() => {
     if (route.open) {
       setFilters({});
@@ -392,6 +405,11 @@ export function GenerateReportModal({ route, report, onQueued }: { route: ModalR
               ))}
             </Select>
           </Field>
+          {format === "PDF" && (
+            <p className="text-xs text-muted-foreground" data-testid="pdf-cap-note">
+              A PDF holds the first {PDF_MAX_ROWS.toLocaleString("en")} rows and says so on the file. Export CSV or XLSX to get every row.
+            </p>
+          )}
           <FilterForm report={report} value={filters} onChange={setFilters} errors={errors} />
           {report.columns.some((c) => c.sensitive) && <p className="text-xs text-muted-foreground">Sensitive columns are masked unless you can export for the whole company.</p>}
         </form>
@@ -404,7 +422,8 @@ export function GenerateReportModal({ route, report, onQueued }: { route: ModalR
 
 export function ReportsCatalogue() {
   const { data, error, loading, reload } = useApi(() => reportsApi.catalogue(), []);
-  const route = useModalRoute("report", { keys: ["code"] });
+  const [dirty, setDirty] = useState(false);
+  const route = useModalRoute("report", { keys: ["code"], dirty });
   const report = findReport(data, route.param("code"));
   const reduce = useReducedMotion();
   return (
@@ -477,7 +496,7 @@ export function ReportsCatalogue() {
           ))}
         </div>
       )}
-      <GenerateReportModal route={route} report={report} />
+      <GenerateReportModal route={route} report={report} onDirtyChange={setDirty} />
     </div>
   );
 }
@@ -487,7 +506,8 @@ export function ReportsCatalogue() {
 export function ReportPage({ code }: { code: string }) {
   const catalogue = useApi(() => reportsApi.catalogue(), []);
   const report = findReport(catalogue.data, code);
-  const route = useModalRoute("report", { keys: ["code"] });
+  const [dirty, setDirty] = useState(false);
+  const route = useModalRoute("report", { keys: ["code"], dirty });
   const [filters, setFilters] = useState<ReportFilters>({});
   const [applied, setApplied] = useState<ReportFilters | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -547,9 +567,12 @@ export function ReportPage({ code }: { code: string }) {
                 </Card>
                 <Card className="p-4">
                   <CardHeader title="Preview" description={preview.data ? `First ${preview.data.rows.length} of ${preview.data.row_count} rows` : undefined} />
-                  {preview.error && !isNotFound(preview.error) ? (
+                  {preview.error ? (
                     <div className="space-y-3">
-                      <ErrorSummary error={preview.error} fields={{}} />
+                      {/* 409 REPORT_NOT_AVAILABLE and 404s are explained too, never a blank card. */}
+                      <Notice tone="warning" title="The preview could not be built">
+                        {errorText(preview.error)}
+                      </Notice>
                       <Button variant="secondary" className="min-h-[44px]" onClick={() => void preview.reload()}>
                         Try again
                       </Button>
@@ -569,7 +592,7 @@ export function ReportPage({ code }: { code: string }) {
           </>
         )}
       </DetailGate>
-      <GenerateReportModal route={route} report={report} />
+      <GenerateReportModal route={route} report={report} onDirtyChange={setDirty} />
     </div>
   );
 }

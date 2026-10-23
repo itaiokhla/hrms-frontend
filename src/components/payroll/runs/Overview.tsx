@@ -35,6 +35,7 @@ import { EmptyState, ErrorState } from "@/components/ui/layout";
 import { Sheet } from "@/components/ui/overlay";
 import { Card, CardHeader, MotionSafe, Skeleton } from "@/components/ui/primitives";
 import { can } from "@/lib/access";
+import { cn } from "@/lib/cn";
 import { fmtDate } from "@/lib/format";
 import { useApi } from "@/lib/hooks";
 import { CURRENCY_LIST } from "@/lib/payroll/catalogues.generated";
@@ -442,6 +443,7 @@ function MoneySection({ data, currencies, convertTo, onConvert }: { data: Overvi
   };
   const groups: (string | null)[] = stages.length > 1 ? stages : [stages[0] ?? null];
   const empty = data.money.length === 0;
+  const statutory = (data.statutory ?? []).some((entity) => entity.items.length > 0);
   return (
     <section aria-label="Pay figures" className="space-y-4">
       {groups.map((stage) => {
@@ -449,11 +451,12 @@ function MoneySection({ data, currencies, convertTo, onConvert }: { data: Overvi
         const state = kpiState(stage ?? undefined);
         const hint = empty ? "No calculated run in this view yet" : `${rows.reduce((n, r) => n + r.employees, 0)} employees · ${rows.reduce((n, r) => n + r.runs, 0)} run(s)`;
         return (
-          <div key={stage ?? "none"} className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <div key={stage ?? "none"} className={cn("grid gap-4 sm:grid-cols-2", statutory ? "xl:grid-cols-4" : "xl:grid-cols-3")}>
             <KpiCard label="Gross" amounts={amounts(rows, "gross")} state={state} icon={<CircleDollarSign />} hint={hint} />
             <KpiCard label="Net" amounts={amounts(rows, "net")} state={state} icon={<Wallet />} tone="success" hint={hint} />
             <KpiCard label="Employer cost" amounts={amounts(rows, "employer_cost")} state={state} icon={<Banknote />} tone="info" hint={hint} />
-            <StatutoryCard data={data} stage={stage} />
+            {/* Statutory only where a country pack defines it (EC-UX-07): no card at all otherwise. */}
+            {statutory && <StatutoryCard data={data} stage={stage} />}
           </div>
         );
       })}

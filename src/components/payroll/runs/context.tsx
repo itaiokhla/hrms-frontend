@@ -57,6 +57,26 @@ export function canResolveExceptions(me: Me | null | undefined, run: Run): boole
   return can(me, P.PAYROLL_RUN_CREATE) && RESOLVABLE_STATES.includes(run.status);
 }
 
+/**
+ * Reversal (corrections, services/reversals.request_reversal): payroll:run:reverse plus the rights to
+ * prepare a correction run (create + calculate), on a finalized run that is not itself a reversal.
+ * The state machine has no REVERSE action, so this is not in `available_actions`.
+ */
+export function canRequestReversal(me: Me | null | undefined, run: Run): boolean {
+  return (
+    can(me, P.PAYROLL_RUN_REVERSE) &&
+    can(me, P.PAYROLL_RUN_CREATE) &&
+    can(me, P.PAYROLL_RUN_CALCULATE) &&
+    isFinalized(run.status) &&
+    run.run_type !== "REVERSAL"
+  );
+}
+
+/** Approving a reversal: payroll:run:approve (the API also refuses the requester and the first approver). */
+export function canApproveReversal(me: Me | null | undefined, run: Run): boolean {
+  return can(me, P.PAYROLL_RUN_APPROVE) && isFinalized(run.status);
+}
+
 export function canAcknowledge(me: Me | null | undefined, run: Run): boolean {
   return can(me, P.PAYROLL_RUN_REVIEW) && ACKNOWLEDGE_STATES.includes(run.status);
 }

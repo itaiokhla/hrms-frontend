@@ -11,6 +11,7 @@ import type {
   CatalogueReport,
   ComplianceOverview,
   DocumentExport,
+  DownloadItem,
   EntityCompliance,
   Liability,
   PayslipDetail,
@@ -18,6 +19,7 @@ import type {
   ReportCatalogue,
   ReportExport,
   ReportPreview,
+  StaffPayslipQuestion,
   StatutoryReport,
 } from "../types";
 
@@ -335,4 +337,53 @@ export function entity(overrides: Partial<EntityCompliance> = {}): EntityComplia
 
 export function overview(entities: EntityCompliance[] = [entity()]): ComplianceOverview {
   return { as_of: "2026-11-20", environment: "TEST", entities };
+}
+
+/** One row of GET /payroll/downloads/mine (services/downloads.py `_center_*_item`). */
+export function downloadItem(overrides: Partial<DownloadItem> = {}): DownloadItem {
+  return {
+    source: "EXPORT",
+    id: 31,
+    kind: "PAYSLIPS_ZIP",
+    title: "Payslips (ZIP)",
+    format: "ZIP",
+    run_id: 9,
+    report_code: null,
+    status: "READY",
+    file_name: "payslips.zip",
+    bytes: 2_400_000,
+    items: 120,
+    error: null,
+    created_at: "2026-11-30T10:00:00Z",
+    expires_at: "2026-12-01T10:01:00Z",
+    link_endpoint: "/api/v1/payroll/exports/31/download",
+    download: { url: "/api/v1/payroll/downloads/tok-31", expires_at: new Date(Date.now() + 300_000).toISOString(), expires_in_seconds: 300 },
+    ...overrides,
+  };
+}
+
+/** One question in the HR inbox (services/payslip_queries.py `query_json(as_staff=True)`). */
+export function staffQuestion(overrides: Partial<StaffPayslipQuestion> = {}): StaffPayslipQuestion {
+  return {
+    id: 71,
+    document_id: 501,
+    payslip: { id: 501, number: "PS-2026-11-0042", version: 1, period_label: "November 2026", period_start: "2026-11-01", period_end: "2026-11-30" },
+    question: "Why is my HRA lower than last month?",
+    status: "OPEN",
+    answer: null,
+    answered_at: null,
+    closed_at: null,
+    created_at: "2026-12-01T09:00:00Z",
+    row_version: 1,
+    employee_id: 42,
+    employee: { id: 42, name: "Asha Rao", employee_code: "E0042" },
+    run_id: 9,
+    run_employee_id: 77,
+    legal_entity_id: 1,
+    pay_group_id: 3,
+    asked_by_user_id: 90,
+    answered_by_user_id: null,
+    closed_by_user_id: null,
+    ...overrides,
+  };
 }

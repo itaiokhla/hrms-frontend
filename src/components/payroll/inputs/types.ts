@@ -7,6 +7,8 @@
  * - claims: services/claims.py `serialize`, `_receipt_json`
  * - overtime: services/overtime.py `serialize`
  * - tasks: services/tasks.py `serialize`, `action_result`
+ * - arrears proposals and retro runs: services/retro.py `proposal_json`, `line_json`; routes/corrections.py
+ *   `_proposal_result`, `_run_result` and the detect / preview payloads
  *
  * Amounts are `{amount: "<decimal string>", currency}` (EC-MON-15); never do Number arithmetic on them.
  */
@@ -389,6 +391,124 @@ export interface Task {
   approval?: ApprovalSummary;
 }
 
+/* ------------------------------------------------------------------ arrears proposals (3.5 §12) */
+
+/** app/models/corrections.py ARREARS_STATUSES. */
+export const ARREARS_STATUSES = ["PENDING_APPROVAL", "APPROVED", "SETTLED", "REJECTED", "CANCELLED", "SUPERSEDED"] as const;
+/** services/retro.py DETECTABLE: the sources a past change can come from. */
+export const ARREARS_TRIGGERS = ["COMPENSATION", "ATTENDANCE", "LEAVE", "OVERTIME", "TASK", "SETTING", "POLICY", "INPUT"] as const;
+export type ArrearsTrigger = (typeof ARREARS_TRIGGERS)[number];
+
+export interface ArrearsIssue {
+  code: string;
+  severity?: string;
+  message?: string;
+}
+
+export interface ArrearsInstalment {
+  id: number;
+  number: number;
+  amount: Money | null;
+  status: string;
+  settled_run_id: number | null;
+  settled_amount: Money | null;
+}
+
+/** One component difference; `delta` is in the employee's perspective (> 0 arrears, < 0 recovery). */
+export interface ArrearsLine {
+  id: number;
+  component_code: string;
+  kind: string;
+  category: string | null;
+  tags: string[];
+  direction: "ARREARS" | "RECOVERY" | string;
+  original: Money | null;
+  recalculated: Money | null;
+  delta: Money | null;
+  period_ref: Record<string, unknown> | null;
+  explanation: string | null;
+  instalments: ArrearsInstalment[];
+}
+
+export interface ArrearsProposal {
+  id: number;
+  employee_id: number;
+  legal_entity_id: number;
+  pay_group_id: number;
+  original_run_id: number;
+  original_run_employee_id: number;
+  original_period: { id: number; start: string; end: string };
+  currency: string;
+  trigger: string;
+  trigger_ref: Record<string, unknown>;
+  changed_sources: string[];
+  base_proposal_id: number | null;
+  superseded_by_id: number | null;
+  totals: Partial<Record<"arrears" | "recovery" | "net_change", Money>>;
+  issues: ArrearsIssue[];
+  status: (typeof ARREARS_STATUSES)[number] | string;
+  payment_mode: string | null;
+  recovery_mode: string | null;
+  retro_run_id: number | null;
+  approval_request_id: number | null;
+  reason: string | null;
+  decision_note: string | null;
+  engine_version: string | null;
+  calc_hash: string | null;
+  created_at: string | null;
+  decided_at: string | null;
+  settled_at: string | null;
+  row_version: number;
+  /** Only on GET /arrears-proposals/{id}. */
+  lines?: ArrearsLine[];
+  outstanding?: Money | null;
+}
+
+/** Approve / reject: compact action results without amounts (routes/corrections.py `_proposal_result`). */
+export interface ArrearsActionResult {
+  id: number;
+  status: string;
+  payment_mode: string | null;
+  recovery_mode: string | null;
+  row_version: number;
+}
+
+export interface ArrearsPreviewLine {
+  component_code: string;
+  direction: string;
+  delta: Money | null;
+  original: Money | null;
+  recalculated: Money | null;
+}
+
+/** POST /arrears-proposals/detect with `preview: true`: nothing is recorded. */
+export interface ArrearsPreviewItem {
+  run_id: number;
+  run_employee_id: number;
+  period: { period_id: number; start: string; end: string; run_id: number; run_number: string; run_employee_id: number };
+  issues: ArrearsIssue[];
+  lines: ArrearsPreviewLine[];
+}
+
+/** POST /arrears-proposals/detect without preview: one outcome per finalized period reached. */
+export interface ArrearsDetectOutcome {
+  run_id: number;
+  run_employee_id: number;
+  proposal_id: number | null;
+  status: string;
+  superseded_id: number | null;
+  cancelled_id: number | null;
+  issues: string[];
+}
+
+export interface RetroRunResult {
+  id: number;
+  number: string;
+  run_type: string;
+  status: string;
+  row_version: number;
+}
+
 /* ------------------------------------------------------------------ lookups */
 
 export interface PayGroupOption {
@@ -412,4 +532,13 @@ export interface EmployeeOption {
   id: number;
   employee_code: string;
   full_name: string;
+}
+
+export interface PayPeriodOption {
+  id: number;
+  pay_group_id: number;
+  start: string;
+  end: string;
+  pay_date: string;
+  status: string;
 }

@@ -218,7 +218,7 @@ export function LoansList() {
             empty={
               <EmptyState
                 title={status || kind ? "No loans match these filters" : "No loans or advances yet"}
-                description="Employees apply from My Loans & Claims; payroll staff can apply on their behalf."
+                description="Employees apply from My Loans; payroll staff can apply on their behalf."
                 action={canManage && <Button className="min-h-[44px]" onClick={() => modal.openModal()}>New loan</Button>}
               />
             }

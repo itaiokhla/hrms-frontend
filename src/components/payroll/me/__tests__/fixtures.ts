@@ -7,7 +7,7 @@ import { P, type PermissionCode, type Scope } from "@/lib/permissions.generated"
 import type { Me } from "@/lib/types";
 import { useSession } from "@/store/session";
 
-import type { Claim, ClaimTypesResponse, Loan, MyBankAccount, MyBankChange, MyPaymentPeriod, MyPayslip, MyPayslipDetail, PayslipContent } from "../types";
+import type { Claim, ClaimTypesResponse, Loan, LoanPolicyPreview, MyBankAccount, MyBankChange, MyPaymentPeriod, MyPayslip, MyPayslipDetail, MyPayslipQuestion, PayrollPreferences, PayslipContent } from "../types";
 
 /** The default self-service grants (hrms-backend/app/core/permission_registry.py SELF_SERVICE). */
 export const SELF_GRANTS: Partial<Record<PermissionCode, Scope[]>> = {
@@ -324,6 +324,82 @@ export function claimTypes(overrides: Partial<ClaimTypesResponse> = {}): ClaimTy
         receipt_required_above: { amount: "500.00", currency: "INR" },
       },
     ],
+    ...overrides,
+  };
+}
+
+/** GET /me/payroll/preferences (services/self_service.py `preferences`). */
+export function preferences(overrides: Partial<PayrollPreferences> = {}): PayrollPreferences {
+  return {
+    employee_id: 42,
+    as_of: "2026-10-22",
+    time_zone: "Asia/Kolkata",
+    legal_entity: { id: 1, name: "Acme India Pvt Ltd", country_code: "IN" },
+    payslip: { queries_enabled: true, pdf_protection: "EMPLOYEE_SECRET" },
+    pay_group: { id: 3, code: "IN-M", name: "Monthly IN", currency: "INR", next_pay_date: "2026-10-31", next_period: { id: 5, start: "2026-10-01", end: "2026-10-31", status: "OPEN" } },
+    bank_accounts: {
+      self_service_enabled: true,
+      change_requires_approval: true,
+      cooling_off_hours: 48,
+      verification_methods: ["DOCUMENT_REVIEW"],
+      split_payments_enabled: false,
+      max_accounts_per_payee: 1,
+      effective_max_accounts: 1,
+      allowed_countries: null,
+    },
+    unavailable: [],
+    ...overrides,
+  };
+}
+
+/** GET /me/payroll/loan-policy (services/loans.py `policy_preview`). */
+export function loanPolicy(overrides: Partial<LoanPolicyPreview> = {}): LoanPolicyPreview {
+  return {
+    employee_id: 42,
+    as_of: "2026-10-22",
+    currency: "INR",
+    protected_net_percent: "50",
+    loan: {
+      enabled: true,
+      policy_status: "RESOLVED",
+      policy: { name: "Staff loans", version: 2, effective_from: "2026-04-01" },
+      limits: {
+        max_amount_formula: "3 * monthly_gross",
+        max_amount: { amount: "200000.00", currency: "INR" },
+        max_tenure_months: 24,
+        interest_rate_percent: "0",
+        interest_method: "FLAT",
+        max_instalment_percent_of_net: "30",
+        min_service_months: 6,
+        max_active_loans: 1,
+        recover_balance_on_exit: true,
+      },
+      usage: { open: 0, service_months: 18 },
+    },
+    advance: {
+      enabled: false,
+      policy_status: "RESOLVED",
+      policy: { name: "Advances", version: 1, effective_from: "2026-04-01" },
+      limits: { max_percent_of_monthly_net: "50", max_amount: null, recover_in_runs: 2, max_per_year: 2 },
+      usage: { open: 0, this_year: 0 },
+    },
+    ...overrides,
+  };
+}
+
+/** One own payslip question (services/payslip_queries.py `query_json(as_staff=False)`). */
+export function myQuestion(overrides: Partial<MyPayslipQuestion> = {}): MyPayslipQuestion {
+  return {
+    id: 7,
+    document_id: 5,
+    payslip: { id: 5, number: "PS-2026-11-0042", version: 1, period_label: "November 2026", period_start: "2026-11-01", period_end: "2026-11-30" },
+    question: "Why is my HRA lower than last month?",
+    status: "ANSWERED",
+    answer: "HRA was prorated for 2 days of unpaid leave.",
+    answered_at: "2026-12-02T10:00:00",
+    closed_at: null,
+    created_at: "2026-12-01T09:00:00",
+    row_version: 2,
     ...overrides,
   };
 }

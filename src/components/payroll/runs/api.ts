@@ -120,6 +120,10 @@ export const runsApi = {
   reversals: (runId: number) => payrollApi.get<ListPage<Reversal>>("/payroll/reversals", { params: { run_id: runId } }),
   reverse: (runId: number, reason: string, rowVersion?: number) =>
     payrollApi.post<{ id: number; status: string; reversal_run_id: number | null }>(`${run(runId)}/reverse`, { reason, row_version: rowVersion }),
+  approveReversal: (reversalId: number, comment: string | null, rowVersion?: number) =>
+    payrollApi.post<{ id: number; status: string; reversal_run_id: number | null }>(`/payroll/reversals/${reversalId}/approve`, { comment: comment || null, row_version: rowVersion }),
+  rejectReversal: (reversalId: number, reason: string, rowVersion?: number) =>
+    payrollApi.post<{ id: number; status: string }>(`/payroll/reversals/${reversalId}/reject`, { reason, row_version: rowVersion }),
 
   /* ---------------------------------------------------------------- after finalize */
   batches: (runId: number) => payrollApi.get<ListPage<PaymentBatchBrief>>("/payroll/payment-batches", { params: { run_id: runId } }),

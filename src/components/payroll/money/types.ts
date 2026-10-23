@@ -211,11 +211,22 @@ export interface ProposedBatch {
   instruction_ids: number[];
 }
 
+/** `_value_date_json` (payment_batches.py, EC-PAY-10): the date rolled off weekends and bank holidays. */
+export interface ValueDateInfo {
+  requested: string;
+  value_date: string;
+  shifted: boolean;
+  /** VALUE_DATE_SHIFTED, VALUE_DATE_AFTER_PAY_DATE */
+  warnings: string[];
+}
+
 export interface BatchProposal {
   run_id: number;
   batches: ProposedBatch[];
   exclusions: ExclusionItem[];
   bank_changes: BankChangeWarning[];
+  /** For the default date (the period's pay date, or today for a late run). */
+  value_date?: ValueDateInfo | null;
 }
 
 export interface BatchFigures {
@@ -346,6 +357,8 @@ export interface PaymentBatch {
   item_count: number;
   total: Money | null;
   value_date: string | null;
+  /** VALUE_DATE_SHIFTED / VALUE_DATE_AFTER_PAY_DATE recorded when the batch was created. */
+  value_date_warnings?: string[];
   prepared_by_user_id: number | null;
   approved_by_user_id: number | null;
   approved_at: string | null;
@@ -380,6 +393,8 @@ export interface BatchActionResult {
   sandbox: boolean;
   row_version: number;
   file: PaymentFileInfo | null;
+  value_date?: string | null;
+  value_date_warnings?: string[];
 }
 
 export interface CreateBatchesResult {
@@ -514,6 +529,39 @@ export interface FundingAccount {
   row_version: number;
   created_at: string;
   updated_at: string | null;
+}
+
+/**
+ * services/funding_accounts.py `option_json` (GET /payroll/funding-accounts/options): what payment users
+ * need to pick and recognise an account. Masked; no signatory list, routing, holder name or provider.
+ */
+export interface FundingAccountOption {
+  id: number;
+  name: string;
+  currency: string;
+  purpose: string;
+  legal_entity: { id: number; name: string | null; code: string | null };
+  account_masked: string;
+  bank_name: string | null;
+  status: "ACTIVE" | "INACTIVE" | string;
+  active: boolean;
+  sandbox: boolean;
+  /** Whether the signed-in user is a signatory of this account. */
+  is_signatory: boolean;
+}
+
+/** One funding account as the payment pages use it, from the options list. */
+export interface FundingChoice {
+  id: number;
+  legal_entity_id: number;
+  legal_entity_name: string | null;
+  name: string;
+  currency: string;
+  account_masked: string;
+  bank_name: string | null;
+  status: string;
+  sandbox: boolean;
+  is_signatory: boolean;
 }
 
 export interface BankDetailsInput {

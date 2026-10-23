@@ -19,7 +19,7 @@ import { useApi } from "@/lib/hooks";
 import { newIdempotencyKey } from "@/lib/payroll/api";
 
 import { paymentsApi } from "./api";
-import { ConflictBanner, ErrorSummary, METHOD_LABELS, Notice, PaymentsNav, SandboxBadge, WorkspaceHeader, fieldErrors, useEmployeeDirectory, useFundingAccounts } from "./shared";
+import { ConflictBanner, ErrorSummary, METHOD_LABELS, Notice, PaymentsNav, SandboxBadge, ValueDateNotice, WorkspaceHeader, fieldErrors, useEmployeeDirectory, useFundingAccounts } from "./shared";
 import type { BankChangeWarning, BatchProposal, ExclusionItem, ProposedBatch, RunOption } from "./types";
 
 /** Run states payments are prepared from (BATCHABLE_RUN_STATES in payment_batches.py). */
@@ -223,6 +223,13 @@ export function CreateBatchForm({ initialRunId, onCreated, onCancel }: { initial
               <EmptyState icon={<PackageCheck />} title="Nothing is ready to pay" description="Every payment of this run is excluded below. Fix the reasons (for example, missing bank accounts), then preview again." />
             )}
           </section>
+          {!valueDate && proposal.value_date && (
+            <ValueDateNotice warnings={proposal.value_date.warnings} valueDate={proposal.value_date.value_date} requested={proposal.value_date.requested} />
+          )}
+          {!valueDate && proposal.value_date && !proposal.value_date.warnings.length && (
+            <p className="text-sm text-muted-foreground">Value date: {fmtDate(proposal.value_date.value_date)} (a business day of the bank).</p>
+          )}
+          {valueDate && <p className="text-sm text-muted-foreground">The server moves {fmtDate(valueDate)} to the next business day if the bank is closed, and the batch shows a warning if it falls after the pay date.</p>}
           <BankChangeWarnings items={proposal.bank_changes} />
           <section aria-label="Exclusions" className="space-y-2">
             <h3 className="text-sm font-semibold">Exclusions ({proposal.exclusions.length})</h3>

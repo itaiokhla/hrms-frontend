@@ -44,7 +44,7 @@ export function MyClaims() {
   return (
     <div className="mx-auto max-w-3xl">
       <MeHeader
-        title="My Loans & Claims"
+        title="My Claims"
         description="Expense claims your employer pays back with your salary."
         actions={
           canSubmit && (

@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, CalendarClock, Download, FilePlus2, Landmark, Scale, TriangleAlert } from "lucide-react";
+import { ArrowLeft, CalendarClock, Download, FilePlus2, Landmark, Scale, AlertTriangle } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import toast from "react-hot-toast";
@@ -30,12 +30,16 @@ import {
   HonestLabels,
   LocalStatusChip,
   Notice,
+  PageSkeleton,
   WorkspaceHeader,
+  closeAfterSave,
   errorText,
   fieldErrors,
   formatDate,
   formatRange,
   toneOf,
+  useDirtyFlags,
+  useReportDirty,
 } from "./shared";
 import type { DueItem, EntityCompliance, Liability, StatutoryReport } from "./types";
 
@@ -72,7 +76,7 @@ const FIELD_LABEL: Record<ActionField, { label: string; required: boolean; multi
 };
 
 /** One modal for every lifecycle action (`?modal=statutory-action&id=&action=`), with the consequence first. */
-export function ReportActionModal({ route, onDone }: { route: ModalRoute; onDone: () => void }) {
+export function ReportActionModal({ route, onDone, onDirtyChange }: { route: ModalRoute; onDone: () => void; onDirtyChange?: (dirty: boolean) => void }) {
   const id = route.open ? route.id : null;
   const action = route.param("action") ?? "";
   const spec = REPORT_ACTIONS[action];
@@ -81,6 +85,7 @@ export function ReportActionModal({ route, onDone }: { route: ModalRoute; onDone
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
+  useReportDirty(route.open && Object.values(values).some((v) => !!v.trim()), onDirtyChange);
   useEffect(() => {
     if (route.open) {
       setValues({});
@@ -115,7 +120,7 @@ export function ReportActionModal({ route, onDone }: { route: ModalRoute; onDone
           ? `Amendment version ${result.amendment.version} started as a draft.`
           : `${r.report_name}: ${statusEntry("statutory_report", result.status).label}.`,
       );
-      route.onOpenChange(false);
+      closeAfterSave(onDirtyChange, () => route.onOpenChange(false));
       onDone();
     } catch (err) {
       setError(err);
@@ -156,7 +161,7 @@ export function ReportActionModal({ route, onDone }: { route: ModalRoute; onDone
                 <HonestLabels labels={[r.watermark]} />
                 {!allowed && (
                   <Notice tone="warning" title="Not available now">
-                    A report that is {statusEntry("statutory_report", r.status).label.toLowerCase()} cannot be {spec.label.toLowerCase()}ed by you. Reload to see the latest state.
+                    “{spec.label}” is not available for a report that is {statusEntry("statutory_report", r.status).label.toLowerCase()}, or your role cannot do it. Reload to see the latest state.
                   </Notice>
                 )}
                 <ConflictBanner error={error} onReload={() => void report.reload()} />
@@ -310,7 +315,17 @@ export function NewStatutoryReportModal({ route, entities, onDone }: { route: Mo
 /* ------------------------------------------------------------------ liabilities */
 
 /** Record a remittance (`?modal=remit&id=`) or reconcile it (`?modal=reconcile&id=`). */
-export function LiabilityActionModal({ route, kind, onDone }: { route: ModalRoute; kind: "remit" | "reconcile"; onDone: () => void }) {
+export function LiabilityActionModal({
+  route,
+  kind,
+  onDone,
+  onDirtyChange,
+}: {
+  route: ModalRoute;
+  kind: "remit" | "reconcile";
+  onDone: () => void;
+  onDirtyChange?: (dirty: boolean) => void;
+}) {
   const id = route.open ? route.id : null;
   const liability = useApi(() => complianceApi.liability(id as string), [id], { enabled: !!id });
   const [ref, setRef] = useState("");
@@ -319,6 +334,7 @@ export function LiabilityActionModal({ route, kind, onDone }: { route: ModalRout
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
+  useReportDirty(route.open && !!(ref.trim() || on || note.trim()), onDirtyChange);
   useEffect(() => {
     if (route.open) {
       setRef("");
@@ -344,7 +360,7 @@ export function LiabilityActionModal({ route, kind, onDone }: { route: ModalRout
       if (kind === "remit") await complianceApi.remit(l.id, { remittance_ref: ref.trim(), remitted_on: on || null, note: note.trim() || null, row_version: l.row_version });
       else await complianceApi.reconcile(l.id, { note: note.trim() || null, row_version: l.row_version });
       toast.success(kind === "remit" ? "Remittance recorded." : "Liability reconciled.");
-      route.onOpenChange(false);
+      closeAfterSave(onDirtyChange, () => route.onOpenChange(false));
       onDone();
     } catch (err) {
       setError(err);
@@ -562,7 +578,7 @@ function DueCalendar({ entity, canCreate, newReport }: { entity: EntityComplianc
                 </span>
                 {item.overdue && (
                   <span className="inline-flex items-center gap-1 text-xs font-semibold text-danger">
-                    <TriangleAlert className="h-3.5 w-3.5" aria-hidden /> Overdue
+                    <AlertTriangle className="h-3.5 w-3.5" aria-hidden /> Overdue
                   </span>
                 )}
                 {item.kind === "REPORT" && entity.statutory_reports.some((r) => r.id === item.report_id) ? (
@@ -722,7 +738,7 @@ function EntityPanel({ entity, routes, version }: { entity: EntityCompliance; ro
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <KpiCard label="Open liabilities" count={entity.liabilities.open_count} icon={<Landmark />} tone="warning" hint={openMoney.length ? undefined : "None open"} delay={0} />
-        <KpiCard label="Overdue" count={entity.liabilities.overdue_count} icon={<TriangleAlert />} tone={entity.liabilities.overdue_count ? "danger" : "success"} amounts={overdueMoney.length ? overdueMoney : null} delay={0.05} />
+        <KpiCard label="Overdue" count={entity.liabilities.overdue_count} icon={<AlertTriangle />} tone={entity.liabilities.overdue_count ? "danger" : "success"} amounts={overdueMoney.length ? overdueMoney : null} delay={0.05} />
         <KpiCard label="Open amount" amounts={openMoney} icon={<Scale />} tone="info" delay={0.1} definition="Owed to authorities and not remitted, per currency. Never added across currencies." />
         <KpiCard label="Reports overdue" count={reportsDue} icon={<CalendarClock />} tone={reportsDue ? "danger" : "success"} hint={entity.liabilities.next_due_date ? `Next contribution due ${formatDate(entity.liabilities.next_due_date)}` : undefined} delay={0.15} />
       </div>
@@ -770,10 +786,11 @@ export function CompliancePage() {
   const { data, error, loading, reload } = useApi(() => complianceApi.overview(), []);
   const [active, setActive] = useState<string>("");
   const [version, setVersion] = useState(0);
-  const action = useModalRoute("statutory-action", { keys: ["id", "action"] });
+  const dirty = useDirtyFlags();
+  const action = useModalRoute("statutory-action", { keys: ["id", "action"], dirty: dirty.of("action") });
   const newReport = useModalRoute("new-statutory", { keys: ["entity", "code", "period"] });
-  const remit = useModalRoute("remit");
-  const reconcile = useModalRoute("reconcile");
+  const remit = useModalRoute("remit", { dirty: dirty.of("remit") });
+  const reconcile = useModalRoute("reconcile", { dirty: dirty.of("reconcile") });
   const entities = data?.entities ?? [];
   const current = entities.find((e) => String(e.legal_entity.id) === active) ?? entities[0];
   const changed = () => {
@@ -793,9 +810,7 @@ export function CompliancePage() {
       {error && !data ? (
         <ErrorState message={errorText(error)} onRetry={() => void reload()} />
       ) : loading && !data ? (
-        <Card className="p-6" aria-busy="true">
-          <p className="text-sm text-muted-foreground">Loading compliance…</p>
-        </Card>
+        <PageSkeleton />
       ) : !entities.length ? (
         <Card>
           <EmptyState icon={<Scale />} title="No legal entities in your scope" description="Compliance is shown per legal entity you can see." />
@@ -810,10 +825,10 @@ export function CompliancePage() {
           {current && <EntityPanel entity={current} routes={{ action, newReport, remit, reconcile }} version={version} />}
         </>
       )}
-      <ReportActionModal route={action} onDone={changed} />
+      <ReportActionModal route={action} onDone={changed} onDirtyChange={dirty.set("action")} />
       <NewStatutoryReportModal route={newReport} entities={entities} onDone={changed} />
-      <LiabilityActionModal route={remit} kind="remit" onDone={changed} />
-      <LiabilityActionModal route={reconcile} kind="reconcile" onDone={changed} />
+      <LiabilityActionModal route={remit} kind="remit" onDone={changed} onDirtyChange={dirty.set("remit")} />
+      <LiabilityActionModal route={reconcile} kind="reconcile" onDone={changed} onDirtyChange={dirty.set("reconcile")} />
     </div>
   );
 }
@@ -822,7 +837,8 @@ export function CompliancePage() {
 
 export function StatutoryReportPage({ id }: { id: string }) {
   const { data, error, loading, reload } = useApi(() => complianceApi.report(id), [id], { enabled: !!id });
-  const action = useModalRoute("statutory-action", { keys: ["id", "action"] });
+  const dirty = useDirtyFlags();
+  const action = useModalRoute("statutory-action", { keys: ["id", "action"], dirty: dirty.of("action") });
   const timeline: TimelineItem[] = data
     ? (
         [
@@ -912,7 +928,7 @@ export function StatutoryReportPage({ id }: { id: string }) {
           </>
         )}
       </DetailGate>
-      <ReportActionModal route={action} onDone={() => void reload()} />
+      <ReportActionModal route={action} onDone={() => void reload()} onDirtyChange={dirty.set("action")} />
     </div>
   );
 }
@@ -921,8 +937,9 @@ export function LiabilityPage({ id }: { id: string }) {
   const { me } = useCan();
   const canSubmit = can(me, P.PAYROLL_STATUTORY_SUBMIT);
   const { data, error, loading, reload } = useApi(() => complianceApi.liability(id), [id], { enabled: !!id });
-  const remit = useModalRoute("remit");
-  const reconcile = useModalRoute("reconcile");
+  const dirty = useDirtyFlags();
+  const remit = useModalRoute("remit", { dirty: dirty.of("remit") });
+  const reconcile = useModalRoute("reconcile", { dirty: dirty.of("reconcile") });
   return (
     <div className="space-y-5">
       <Link href="/payroll/compliance" className="inline-flex min-h-[44px] items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
@@ -1016,8 +1033,8 @@ export function LiabilityPage({ id }: { id: string }) {
           </>
         )}
       </DetailGate>
-      <LiabilityActionModal route={remit} kind="remit" onDone={() => void reload()} />
-      <LiabilityActionModal route={reconcile} kind="reconcile" onDone={() => void reload()} />
+      <LiabilityActionModal route={remit} kind="remit" onDone={() => void reload()} onDirtyChange={dirty.set("remit")} />
+      <LiabilityActionModal route={reconcile} kind="reconcile" onDone={() => void reload()} onDirtyChange={dirty.set("reconcile")} />
     </div>
   );
 }

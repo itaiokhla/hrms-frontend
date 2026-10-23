@@ -20,6 +20,7 @@ import { P } from "@/lib/permissions.generated";
 import { fmtDate } from "@/lib/format";
 
 import { lookupsApi, overtimeApi, tasksApi, wageInputsApi } from "./api";
+import { ArrearsTab } from "./Arrears";
 import { ImportCsvModal, recentImports } from "./ImportCsvModal";
 import {
   DecisionModal,
@@ -157,7 +158,8 @@ const EMPTY_FILTERS: InputFilters = { period: "", entity: "", payGroup: "", stat
 
 /**
  * Payroll › Wage Inputs (3.8 §5.5): One-time · Overtime · Tasks · Arrears proposals · Imports, with
- * "Add wage input" (`?modal=wage-input`) and "Import CSV" (`?modal=import&type=wage-inputs`).
+ * "Add wage input" (`?modal=wage-input`) and "Import CSV" (`?modal=import&type=wage-inputs`). The runs
+ * area links to `?tab=arrears` (optionally `&run=<id>`); the arrears modals are listed in `Arrears.tsx`.
  */
 export function WageInputsWorkspace() {
   const { me } = useCan();
@@ -168,6 +170,7 @@ export function WageInputsWorkspace() {
   const [refresh, setRefresh] = useState(0);
   const canEdit = can(me, P.PAYROLL_INPUTS_EDIT);
   const canImport = can(me, P.PAYROLL_INPUTS_IMPORT);
+  const payGroups = usePayGroups();
 
   return (
     <div>
@@ -210,7 +213,7 @@ export function WageInputsWorkspace() {
           <TasksUnpaidTab />
         </TabPanel>
         <TabPanel value="arrears">
-          <ArrearsTab />
+          {tab === "arrears" && <ArrearsTab payGroups={payGroups} />}
         </TabPanel>
         <TabPanel value="imports">
           <ImportsTab refresh={refresh} onOpen={(id) => importModal.openModal({ id, type: "wage-inputs" })} onImport={canImport ? () => importModal.openModal({ type: "wage-inputs" }) : undefined} />
@@ -554,20 +557,6 @@ function TasksUnpaidTab() {
         />
       )}
       {data && <Pagination total={data.total} skip={skip} limit={LIMIT} onChange={setSkip} />}
-    </Card>
-  );
-}
-
-/* ------------------------------------------------------------------ Arrears proposals */
-
-/** No corrections / arrears-proposals API exists yet (3.4 §17): say so instead of showing an empty list. */
-function ArrearsTab() {
-  return (
-    <Card className="p-2">
-      <EmptyState
-        title="Arrears proposals are not available yet"
-        description="Proposals appear when a back-dated salary change or a correction to a finalized run creates arrears. The corrections service that produces them isn't connected yet. Until then, enter arrears as a one-time wage input."
-      />
     </Card>
   );
 }

@@ -21,8 +21,8 @@ import { isConflict, newIdempotencyKey, stepUpApi } from "@/lib/payroll/api";
 import { P } from "@/lib/permissions.generated";
 
 import { runsApi } from "./api";
-import { canHold, hasAction, isFinalized, useRun } from "./context";
-import { ConflictBanner, MoneyStack, Notice, figureByCurrency, primaryLink } from "./shared";
+import { canApproveReversal, canHold, canRequestReversal, hasAction, useRun } from "./context";
+import { ConflictBanner, MoneyStack, Notice, figureByCurrency, humanize, primaryLink } from "./shared";
 import type { FinalizationStatus } from "./types";
 
 /* ------------------------------------------------------------------ action bar (3.8 §5.3 action bar rules) */
@@ -181,10 +181,11 @@ export function RunActionBar({ onHold }: { onHold: () => void }) {
       </MenuItem>,
     );
   }
-  if (has("REVERSE")) {
+  const reversible = canRequestReversal(me, run) || canApproveReversal(me, run);
+  if (reversible) {
     more.push(
       <MenuItem key="reverse" icon={<Undo2 className="h-4 w-4" />} onSelect={() => reverse.openModal({ run: run.id })}>
-        Reverse run…
+        {canRequestReversal(me, run) ? "Reverse run…" : "Reversal requests…"}
       </MenuItem>,
     );
   }
@@ -227,7 +228,7 @@ export function RunActionBar({ onHold }: { onHold: () => void }) {
       <RunActionModal open={action.open} kind={(action.param("action") as ReasonAction | null) ?? null} onOpenChange={action.onOpenChange} onDone={() => void action.close().then(reload)} />
       <ApproveModal open={approve.open && canApprove} decision={approve.param("decision") === "reject" ? "reject" : "approve"} onOpenChange={approve.onOpenChange} onDone={() => void approve.close().then(reload)} />
       <FinalizeModal open={finalize.open && has("FINALIZE")} onOpenChange={finalize.onOpenChange} onDone={() => void finalize.close().then(reload)} />
-      <ReverseModal open={reverse.open && has("REVERSE")} onOpenChange={reverse.onOpenChange} onDone={() => void reverse.close().then(reload)} />
+      <ReverseModal open={reverse.open && reversible} onOpenChange={reverse.onOpenChange} onDone={() => void reverse.close().then(reload)} />
     </>
   );
 }
@@ -596,33 +597,56 @@ function FinalizeModal({ open, onOpenChange, onDone }: { open: boolean; onOpenCh
   );
 }
 
+
 /* ------------------------------------------------------------------ reverse (corrections; two approvers, recovery) */
 
+/**
+ * Reverse run (`?modal=reverse&run=`): request a reversal of a finalized run, or, when one is pending,
+ * approve or reject it as one of the two required approvers. The original run never changes; money
+ * already paid becomes a recovery in later runs, never a bank debit.
+ */
 function ReverseModal({ open, onOpenChange, onDone }: { open: boolean; onOpenChange: (o: boolean) => void; onDone: () => void }) {
-  const { run } = useRun();
+  const { run, me } = useRun();
   const existing = useApi(() => runsApi.reversals(run.id), [run.id, open], { enabled: open });
-  const [reason, setReason] = useState("");
+  const [text, setText] = useState("");
+  const [decision, setDecision] = useState<"approve" | "reject">("approve");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const [touched, setTouched] = useState(false);
   useEffect(() => {
     if (!open) {
-      setReason("");
+      setText("");
+      setDecision("approve");
       setError(null);
       setTouched(false);
     }
   }, [open]);
-  const live = (existing.data?.items ?? []).filter((r) => !["REJECTED", "CANCELLED"].includes(r.status));
+  const live = (existing.data?.items ?? []).filter((r) => r.status === "PENDING_APPROVAL" || r.status === "APPROVED");
+  const pending = live.find((r) => r.status === "PENDING_APPROVAL") ?? null;
+  const userId = me?.user.id;
+  const alreadyActed = !!pending && (pending.requested_by_user_id === userId || pending.approvals.some((a) => a.user_id === userId));
+  const mayDecide = !!pending && canApproveReversal(me, run) && !alreadyActed;
+  const mayRequest = !live.length && canRequestReversal(me, run);
+  const textRequired = mayRequest || (mayDecide && decision === "reject");
+  const missing = textRequired && !text.trim();
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     setTouched(true);
-    if (!reason.trim() || busy) return;
+    if (missing || busy || (!mayRequest && !mayDecide)) return;
     setBusy(true);
     setError(null);
     try {
-      await runsApi.reverse(run.id, reason.trim(), run.row_version);
-      toast.success("Reversal requested — two different approvers must approve it");
+      if (mayRequest) {
+        await runsApi.reverse(run.id, text.trim(), run.row_version);
+        toast.success("Reversal requested — two different approvers must approve it");
+      } else if (pending && decision === "approve") {
+        const result = await runsApi.approveReversal(pending.id, text.trim() || null, pending.row_version);
+        toast.success(result.status === "PENDING_APPROVAL" ? "First approval recorded — a second approver is needed" : "Reversal approved — the reversal run is created");
+      } else if (pending) {
+        await runsApi.rejectReversal(pending.id, text.trim(), pending.row_version);
+        toast.success("Reversal rejected");
+      }
       onDone();
     } catch (err) {
       setError(err);
@@ -630,6 +654,8 @@ function ReverseModal({ open, onOpenChange, onDone }: { open: boolean; onOpenCha
       setBusy(false);
     }
   };
+
+  const action = mayRequest ? "Request reversal" : mayDecide ? (decision === "approve" ? "Approve reversal" : "Reject reversal") : null;
 
   return (
     <Modal
@@ -643,9 +669,9 @@ function ReverseModal({ open, onOpenChange, onDone }: { open: boolean; onOpenCha
           <Button variant="secondary" disabled={busy} onClick={() => onOpenChange(false)}>
             Back
           </Button>
-          {!live.length && (
-            <Button type="submit" form="reverse-form" variant="danger" loading={busy}>
-              Request reversal
+          {action && (
+            <Button type="submit" form="reverse-form" variant={mayDecide && decision === "approve" ? "primary" : "danger"} loading={busy}>
+              {action}
             </Button>
           )}
         </>
@@ -656,25 +682,28 @@ function ReverseModal({ open, onOpenChange, onDone }: { open: boolean; onOpenCha
           <p className="font-medium">What a reversal does</p>
           <ul className="mt-1 list-disc space-y-1 ps-5">
             <li>A reversal run with the opposite of every line of this run is created; this run itself never changes.</li>
-            <li>Two different approvers must approve it before it takes effect.</li>
+            <li>Two different approvers must approve it before it takes effect; the requester can&apos;t approve it.</li>
             <li>Money already paid is not pulled back from bank accounts: it becomes a recovery in later runs.</li>
           </ul>
         </div>
-        {existing.loading && !existing.data ? (
+        {existing.error ? (
+          <Notice tone="danger" title="Couldn't load reversal requests">
+            {existing.error.message}
+          </Notice>
+        ) : existing.loading && !existing.data ? (
           <Skeleton className="h-12 w-full" />
         ) : live.length > 0 ? (
           <Notice tone="info" title="A reversal is already in progress">
-            Request #{live[0].id}: {live[0].status.toLowerCase().replace(/_/g, " ")}, {live[0].approvals.length} of 2 approvals.
+            Request #{live[0].id}: {humanize(live[0].status).toLowerCase()}, {live[0].approvals.length} of 2 approvals. Reason: {live[0].reason}
+            {alreadyActed && <span className="mt-1 block text-xs">You requested or already approved it, so another person must decide.</span>}
           </Notice>
-        ) : (
-          <Field label="Reason" required error={touched && !reason.trim() ? "Give a reason." : undefined}>
-            <Textarea rows={3} maxLength={1000} value={reason} onChange={(e) => setReason(e.target.value)} />
-          </Field>
-        )}
+        ) : !mayRequest ? (
+          <p className="text-sm text-muted-foreground">No reversal has been requested for this run.</p>
+        ) : null}
         {live[0] && Object.entries(live[0].preview).length > 0 && (
-          <dl className="text-sm">
+          <dl className="space-y-1 text-sm">
             {Object.entries(live[0].preview).map(([cur, v]) => (
-              <div key={cur} className="flex justify-between gap-2">
+              <div key={cur} className="flex flex-wrap justify-between gap-2">
                 <dt className="text-muted-foreground">Net reversed ({v.employees} employees)</dt>
                 <dd>
                   <MoneyText money={v.net} />
@@ -683,15 +712,34 @@ function ReverseModal({ open, onOpenChange, onDone }: { open: boolean; onOpenCha
             ))}
           </dl>
         )}
+        {mayDecide && (
+          <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Decision">
+            {(["approve", "reject"] as const).map((c) => (
+              <button
+                key={c}
+                type="button"
+                role="radio"
+                aria-checked={decision === c}
+                onClick={() => setDecision(c)}
+                className={cn("min-h-[44px] rounded-xl border px-3 text-sm font-medium", decision === c ? "border-primary bg-primary-soft" : "border-border hover:bg-surface-muted")}
+              >
+                {c === "approve" ? "Approve" : "Reject"}
+              </button>
+            ))}
+          </div>
+        )}
+        {(mayRequest || mayDecide) && (
+          <Field label={textRequired ? "Reason" : "Comment (optional)"} required={textRequired} error={touched && missing ? "Give a reason." : undefined}>
+            <Textarea rows={3} maxLength={1000} value={text} onChange={(e) => setText(e.target.value)} />
+          </Field>
+        )}
         <ConflictBanner error={error} onReload={() => onDone()} />
         {!!error && !isConflict(error) && (
           <Notice tone="danger" title="That didn't work">
             {errorMessage(error)}
           </Notice>
         )}
-        {isFinalized(run.status) ? null : <p className="text-sm text-muted-foreground">Only finalized runs can be reversed.</p>}
       </form>
     </Modal>
   );
 }
-

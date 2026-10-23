@@ -160,7 +160,7 @@ export function DocumentsTab() {
           </ul>
         </Card>
       )}
-      <Link href={`/payroll/payslips?run=${run.id}`} className="inline-flex min-h-[44px] items-center gap-1 text-sm font-medium text-primary hover:underline">
+      <Link href={`/payroll/payslips?run_id=${run.id}`} className="inline-flex min-h-[44px] items-center gap-1 text-sm font-medium text-primary hover:underline">
         Open the payslip register <ArrowUpRight className="h-4 w-4 rtl:-scale-x-100" aria-hidden />
       </Link>
     </div>

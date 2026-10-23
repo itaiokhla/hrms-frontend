@@ -23,8 +23,10 @@ import { P } from "@/lib/permissions.generated";
 
 import { downloadDocument, meApi } from "./api";
 import { PayslipDocument } from "./PayslipDocument";
+import { MyQuestions, PayslipQuestionsPanel } from "./PayslipQuestions";
+import { passwordApplies, questionsEnabled, usePayrollPreferences } from "./preferences";
 import { canSelf, DetailGate, ErrorSummary, fieldErrors, isCurrentPayslip, MeChip, MeHeader, Notice, payslipMarkers, periodRange } from "./shared";
-import type { DocumentRequestDto, MyPayslip, MyPayslipDetail, PayDocumentDto } from "./types";
+import type { DocumentRequestDto, MyPayslip, MyPayslipDetail, PayDocumentDto, PayrollPreferences } from "./types";
 
 const YEARS_BACK = 6;
 const DOC_TYPE_LABEL: Record<string, string> = {
@@ -56,9 +58,15 @@ export async function downloadPayslip(p: Pick<MyPayslip, "id" | "file_name">) {
 
 /* ------------------------------------------------------------------ list page */
 
-/** My Payslips (3.8 §5.18): list by period with New / Viewed / Revised, viewer modal, full page, PDF password. */
+/**
+ * My Payslips (3.8 §5.18): list by period with New / Viewed / Revised, viewer modal, full page, the PDF
+ * password (only when the employer protects PDFs with it) and payslip questions (only when enabled).
+ */
 export function MyPayslips() {
   const reduceMotion = useReducedMotion();
+  const preferences = usePayrollPreferences();
+  const canAsk = questionsEnabled(preferences.prefs);
+  const showPassword = passwordApplies(preferences);
   const thisYear = new Date().getFullYear();
   const [year, setYear] = useState<number | null>(null);
   const viewer = useModalRoute("payslip");
@@ -72,9 +80,11 @@ export function MyPayslips() {
         title="My Payslips"
         description="Every published payslip, newest first. Open one to see the breakdown or download the PDF."
         actions={
-          <Button variant="secondary" className="min-h-[44px]" onClick={() => password.openModal()}>
-            <KeyRound className="h-4 w-4" aria-hidden /> Document password
-          </Button>
+          showPassword && (
+            <Button variant="secondary" className="min-h-[44px]" onClick={() => password.openModal()}>
+              <KeyRound className="h-4 w-4" aria-hidden /> Set document password
+            </Button>
+          )
         }
       />
       <div className="mb-4 flex flex-wrap items-end gap-3">
@@ -128,10 +138,12 @@ export function MyPayslips() {
         </ul>
       )}
 
+      <MyQuestions enabled={canAsk} />
+
       <OtherDocuments />
 
-      <PayslipViewerModal id={viewer.id} open={viewer.open} onOpenChange={viewer.onOpenChange} onViewed={reload} />
-      <PayslipPasswordModal open={password.open} onOpenChange={password.onOpenChange} />
+      <PayslipViewerModal id={viewer.id} open={viewer.open} onOpenChange={viewer.onOpenChange} onViewed={reload} canAsk={canAsk} />
+      <PayslipPasswordModal open={password.open} onOpenChange={password.onOpenChange} prefs={preferences.prefs} />
     </div>
   );
 }
@@ -170,7 +182,20 @@ function PayslipCard({ payslip: p, onOpen }: { payslip: MyPayslip; onOpen: () =>
 /* ------------------------------------------------------------------ viewer modal + full page */
 
 /** Payslip viewer (3.8 §6): `xl`, deep link `?modal=payslip&id=`, "Open full page ↗", download, print. */
-export function PayslipViewerModal({ id, open, onOpenChange, onViewed }: { id: string | null; open: boolean; onOpenChange: (o: boolean) => void; onViewed?: () => void }) {
+export function PayslipViewerModal({
+  id,
+  open,
+  onOpenChange,
+  onViewed,
+  canAsk = false,
+}: {
+  id: string | null;
+  open: boolean;
+  onOpenChange: (o: boolean) => void;
+  onViewed?: () => void;
+  /** payslip.queries_enabled resolved true for the employee (GET /me/payroll/preferences). */
+  canAsk?: boolean;
+}) {
   const { data, error, loading, reload } = useApi(() => meApi.payslip(id ?? ""), [id], { enabled: open && !!id });
   // The first open records "Viewed" on the server; refresh the list once so its chip follows.
   useEffect(() => {
@@ -202,7 +227,12 @@ export function PayslipViewerModal({ id, open, onOpenChange, onViewed }: { id: s
       }
     >
       <DetailGate loading={loading} error={error} hasData={!!shown} onRetry={reload} what="Payslip" backHref="/me/payslips" backLabel="Back to My Payslips">
-        {shown && (shown.content ? <PayslipDocument content={shown.content} compact /> : <NoContent />)}
+        {shown && (
+          <div className="space-y-5">
+            {shown.content ? <PayslipDocument content={shown.content} compact /> : <NoContent />}
+            <PayslipQuestionsPanel documentId={shown.id} canAsk={canAsk && isCurrentPayslip(shown)} />
+          </div>
+        )}
       </DetailGate>
     </Modal>
   );
@@ -229,6 +259,7 @@ function PayslipMeta({ payslip }: { payslip: MyPayslipDetail }) {
 /** Full page of one payslip (D-12 parity with the viewer modal). */
 export function MyPayslipPage({ id }: { id: string }) {
   const { data, error, loading, reload } = useApi(() => meApi.payslip(id), [id]);
+  const { prefs } = usePayrollPreferences();
   return (
     <DetailGate loading={loading} error={error} hasData={!!data} onRetry={reload} what="Payslip" backHref="/me/payslips" backLabel="Back to My Payslips">
       {data && (
@@ -256,6 +287,9 @@ export function MyPayslipPage({ id }: { id: string }) {
             </Notice>
           )}
           <Card className="p-5">{data.content ? <PayslipDocument content={data.content} /> : <NoContent />}</Card>
+          <div className="mt-5">
+            <PayslipQuestionsPanel documentId={data.id} canAsk={questionsEnabled(prefs) && isCurrentPayslip(data)} />
+          </div>
         </div>
       )}
     </DetailGate>
@@ -266,10 +300,10 @@ export function MyPayslipPage({ id }: { id: string }) {
 
 /**
  * "Set document password" (EC-DOC-15): set or reset after step-up; never shown again, HR never sees it.
- * The API does not say whether the employer turned PDF protection on (payslip.pdf_protection), so the
- * copy explains when the password is used instead of claiming it is in force.
+ * The copy follows `payslip.pdf_protection` from the preferences: in force (EMPLOYEE_SECRET), not in use
+ * (NONE; still reachable by a deep link), or unknown when the preferences couldn't be read.
  */
-export function PayslipPasswordModal({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
+export function PayslipPasswordModal({ open, onOpenChange, prefs }: { open: boolean; onOpenChange: (o: boolean) => void; prefs?: PayrollPreferences }) {
   const status = useApi(() => meApi.passwordStatus(), [open], { enabled: open });
   const [password, setPassword] = useState("");
   const [confirmValue, setConfirmValue] = useState("");
@@ -309,13 +343,18 @@ export function PayslipPasswordModal({ open, onOpenChange }: { open: boolean; on
   };
 
   const isSet = status.data?.set;
+  const protection = prefs?.payslip.pdf_protection ?? null;
   return (
     <Modal
       open={open}
       onOpenChange={onOpenChange}
       size="sm"
       title={isSet ? "Change document password" : "Set document password"}
-      description="If your employer protects payslip PDFs, the PDFs e-mailed to you open with this password. You'll confirm it's you first."
+      description={
+        protection === "EMPLOYEE_SECRET"
+          ? "Your employer protects payslip PDFs: the PDFs e-mailed to you open with this password. You'll confirm it's you first."
+          : "If your employer protects payslip PDFs, the PDFs e-mailed to you open with this password. You'll confirm it's you first."
+      }
       footer={
         <>
           <Button variant="ghost" className="min-h-[44px]" onClick={() => onOpenChange(false)}>
@@ -328,6 +367,11 @@ export function PayslipPasswordModal({ open, onOpenChange }: { open: boolean; on
       }
     >
       <form id="payslip-password" onSubmit={submit} className="space-y-4" noValidate>
+        {protection === "NONE" && (
+          <Notice tone="info" title="Payslip PDFs aren't password-protected right now">
+            Your employer doesn&apos;t protect payslip PDFs at the moment. A password you set is used if that changes.
+          </Notice>
+        )}
         {status.data && (
           <p className="text-sm text-muted-foreground">
             {isSet ? `A password is set${status.data.set_at ? ` (since ${fmtDateTime(status.data.set_at)})` : ""}. Saving replaces it.` : "No password is set yet."}

@@ -96,7 +96,7 @@ function primitive(value: unknown): string | null {
   return null;
 }
 
-function explainProps(line: RunLine, runId: number, runEmployeeId: number) {
+function explainProps(line: RunLine, runId: number, runEmployeeId: number, fallback?: string | null) {
   const trace = line.trace ?? {};
   const formula = typeof trace.formula === "string" ? trace.formula : undefined;
   const refs = trace.references && typeof trace.references === "object" && !Array.isArray(trace.references) ? (trace.references as Record<string, unknown>) : {};
@@ -111,16 +111,23 @@ function explainProps(line: RunLine, runId: number, runEmployeeId: number) {
   }));
   sources.push({ label: "Open the employee in the run", href: `/payroll/runs/${runId}/employees/${runEmployeeId}` });
   const notes = Array.isArray(trace.notes) ? trace.notes.filter((n) => typeof n === "string").join(" ") : typeof trace.notes === "string" ? trace.notes : undefined;
-  return { explanation: line.explanation || "No explanation was recorded for this line.", formula, inputs, sources, rounding: notes };
+  return { explanation: line.explanation || fallback || "No explanation was recorded for this line.", formula, inputs, sources, rounding: notes };
 }
 
-function WhyAmount({ item, explainer, runId, runEmployeeId }: { item: PayslipLineItem; explainer: Explainer; runId: number; runEmployeeId: number }) {
+/**
+ * "Why this amount?" on a payslip line. With payroll:run:read the run employee's trace is loaded (formula,
+ * inputs, sources); without it, or when the trace can't be loaded, the explanation frozen on the payslip is
+ * shown on its own: the same text the employee sees, never the HR-only trace.
+ */
+function WhyAmount({ item, explainer, runId, runEmployeeId }: { item: PayslipLineItem; explainer?: Explainer; runId?: number | null; runEmployeeId?: number | null }) {
   const [open, setOpen] = useState(false);
   const [state, setState] = useState<{ loading: boolean; line?: RunLine | null; error?: string }>({ loading: false });
+  const traced = !!explainer?.available && !!runId && !!runEmployeeId;
+  const frozen = item.explanation?.trim() || null;
   const toggle = async () => {
     const next = !open;
     setOpen(next);
-    if (!next || state.line !== undefined) return;
+    if (!next || !traced || !explainer || state.line !== undefined) return;
     setState({ loading: true });
     try {
       const lines = (await explainer.load()) ?? [];
@@ -144,16 +151,24 @@ function WhyAmount({ item, explainer, runId, runEmployeeId }: { item: PayslipLin
       </button>
       {open && (
         <div className="mt-2" data-print-hidden>
-          {state.loading ? (
+          {!traced ? (
+            <ExplainPanel explanation={frozen ?? "No explanation was recorded for this line."} />
+          ) : state.loading ? (
             <p className="text-sm text-muted-foreground" aria-busy="true">
               Loading the calculation…
             </p>
           ) : state.error ? (
-            <p className="text-sm text-danger" role="alert">
-              {state.error}
-            </p>
+            frozen ? (
+              <ExplainPanel explanation={frozen} />
+            ) : (
+              <p className="text-sm text-danger" role="alert">
+                {state.error}
+              </p>
+            )
           ) : state.line ? (
-            <ExplainPanel {...explainProps(state.line, runId, runEmployeeId)} defaultExpanded />
+            <ExplainPanel {...explainProps(state.line, runId as number, runEmployeeId as number, frozen)} defaultExpanded />
+          ) : frozen ? (
+            <ExplainPanel explanation={frozen} />
           ) : (
             <p className="text-sm text-muted-foreground">No calculation trace was found for this line.</p>
           )}
@@ -224,7 +239,9 @@ function LinesTable({
                   <span className="font-medium">{item.label}</span>
                   {item.period_ref_label && <span className="block text-xs text-muted-foreground">For {item.period_ref_label}</span>}
                   {item.fixture && <span className="ms-2 rounded bg-warning-soft px-1.5 text-[11px] font-semibold text-warning">FIXTURE — not law</span>}
-                  {explainer?.available && runId && runEmployeeId ? <WhyAmount item={item} explainer={explainer} runId={runId} runEmployeeId={runEmployeeId} /> : null}
+                  {(explainer?.available && runId && runEmployeeId) || item.explanation?.trim() ? (
+                    <WhyAmount item={item} explainer={explainer} runId={runId} runEmployeeId={runEmployeeId} />
+                  ) : null}
                 </td>
                 {hasUnits && (
                   <td className="py-1.5 text-end tabular-nums">

@@ -1,8 +1,9 @@
 "use client";
 
-import { Info } from "lucide-react";
-import type { ReactNode } from "react";
+import { HelpCircle, Info } from "lucide-react";
+import { useId, useState, type ReactNode } from "react";
 
+import { ExplainPanel } from "@/components/payroll/ExplainPanel";
 import { MoneyText } from "@/components/payroll/MoneyText";
 import { cn } from "@/lib/cn";
 import { fmtDate } from "@/lib/format";
@@ -128,6 +129,38 @@ export function PayslipDocument({ content, compact }: { content: PayslipContent;
   );
 }
 
+/**
+ * "Why this amount?" for one payslip line: the engine's plain-language explanation frozen on the payslip
+ * (employee-visible lines only; never the trace, formula inputs or sources). Nothing is shown for a line
+ * without one, so an older payslip never pretends to explain itself.
+ */
+export function WhyThisAmount({ label, explanation }: { label: string; explanation: string | null | undefined }) {
+  const [open, setOpen] = useState(false);
+  const id = useId();
+  const text = explanation?.trim();
+  if (!text) return null;
+  return (
+    <>
+      <button
+        type="button"
+        data-print-hidden
+        aria-expanded={open}
+        aria-controls={id}
+        aria-label={`Why this amount? ${label}`}
+        onClick={() => setOpen((v) => !v)}
+        className="ms-1 inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg align-middle text-muted-foreground hover:text-primary sm:min-h-[28px] sm:min-w-[28px]"
+      >
+        <HelpCircle className="h-4 w-4" aria-hidden />
+      </button>
+      {open && (
+        <div id={id} className="mt-1" data-print-hidden>
+          <ExplainPanel explanation={text} className="p-3" />
+        </div>
+      )}
+    </>
+  );
+}
+
 function Pair({ label, value }: { label: string; value: ReactNode }) {
   return (
     <>
@@ -184,7 +217,10 @@ function Section({
             {lines.map((line, i) => (
               <tr key={`${line.code}-${i}`} className="border-b border-border/50 last:border-0">
                 <th scope="row" className="py-2 pe-3 text-start font-normal">
-                  <span className="block">{line.label}</span>
+                  <div>
+                    {line.label}
+                    <WhyThisAmount label={line.label} explanation={line.explanation} />
+                  </div>
                   {(line.units || line.period_ref_label || line.fixture) && (
                     <span className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
                       {line.units && line.rate && (
