@@ -47,4 +47,6 @@ next-env.d.ts
 /playwright-report-wl/
 /test-results-saas/
 /playwright-report-saas/
+/test-results-payroll/
+/playwright-report-payroll/
 /test-evidence/

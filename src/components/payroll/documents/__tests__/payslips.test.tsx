@@ -67,6 +67,23 @@ describe("Payslips (HR)", () => {
     expect(screen.getByRole("button", { name: "Hide amounts" })).toBeInTheDocument();
   });
 
+  it("keeps the table within a tablet-width page: Published and Notes appear only from lg (Chrome suite, 820 px)", async () => {
+    signIn(READER);
+    routes({ "/payroll/payslips": { total: 1, items: [payslip()] } });
+    render(<PayslipsPage />);
+    await screen.findAllByText("Asha Rao");
+    const table = screen.getByRole("table", { name: "Payslips" });
+    for (const name of ["Published", "Notes"]) {
+      const header = within(table).getByRole("columnheader", { name });
+      expect(header).toHaveClass("hidden", "md:hidden", "lg:table-cell");
+      expect(header).not.toHaveClass("md:table-cell");
+    }
+    // The columns a tablet needs stay visible from md.
+    for (const name of ["Employee", "Net pay", "Status", "Payment"]) {
+      expect(within(table).getByRole("columnheader", { name })).not.toHaveClass("md:hidden");
+    }
+  });
+
   it("filters by status and sends the filter to the API", async () => {
     signIn(READER);
     routes({ "/payroll/payslips": { total: 0, items: [] } });

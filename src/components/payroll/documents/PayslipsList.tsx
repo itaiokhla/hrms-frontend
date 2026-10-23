@@ -482,11 +482,14 @@ export function PayslipsList() {
     { key: "net", header: "Net pay", className: "text-end", cell: (row) => <MoneyText money={row.net} /> },
     { key: "status", header: "Status", cell: (row) => <StatusChip vocabulary="document" code={row.status} /> },
     { key: "payment", header: "Payment", hideOnMobile: true, cell: (row) => <span className="text-muted-foreground">{row.payment ?? "—"}</span> },
-    { key: "published", header: "Published", hideOnMobile: true, cell: (row) => <span className="text-muted-foreground">{row.published_at ? formatDateTime(row.published_at) : "—"}</span> },
+    // Published and Notes appear from lg: with the sticky header the table can't scroll sideways at md, and all
+    // eight columns are wider than a tablet (the page itself scrolled sideways at 820 px).
+    { key: "published", header: "Published", hideOnMobile: true, className: "md:hidden lg:table-cell", cell: (row) => <span className="text-muted-foreground">{row.published_at ? formatDateTime(row.published_at) : "—"}</span> },
     {
       key: "labels",
       header: "Notes",
       hideOnMobile: true,
+      className: "md:hidden lg:table-cell",
       cell: (row) =>
         row.labels?.length ? (
           <span className="text-xs font-medium text-warning" title={row.labels.join(" · ")}>
