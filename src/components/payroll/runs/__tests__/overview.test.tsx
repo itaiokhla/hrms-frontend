@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 
 import PayrollOverviewPage from "@/app/(app)/payroll/page";
 import { ConfirmProvider } from "@/components/ui/overlay";
+import { P } from "@/lib/permissions.generated";
 
 import { waitingFor } from "../Overview";
 import { INPUTS_ONLY, PAYROLL_ADMIN, VIEWER, me, overview, plain, run, signIn } from "./fixtures";
@@ -67,6 +68,19 @@ describe("Payroll overview", () => {
     expect(screen.getByText("Your payroll pages")).toBeInTheDocument();
     expect(screen.queryByText("Total employees")).not.toBeInTheDocument();
     expect(mockGet).not.toHaveBeenCalledWith("/payroll/overview", expect.anything());
+  });
+
+  it("gives a legacy payroll manager with pay-run and configuration access the KPIs, with the settings and legacy links", async () => {
+    signIn(me({ [P.PAYROLL_READ]: ["COMPANY"], [P.PAYROLL_RUN_READ]: ["COMPANY"], [P.PAYROLL_CONFIGURATION_READ]: ["COMPANY"] }));
+    routes();
+    wrap(<PayrollOverviewPage />);
+    expect(await screen.findByText("Total employees")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Payroll", level: 1 })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Legacy payroll/ })).toHaveAttribute("href", "/payroll/legacy");
+    expect(screen.getByRole("link", { name: /Payroll settings/ })).toHaveAttribute("href", "/settings/payroll/general");
+    // The checklist belongs to the shell of people without pay-run access.
+    expect(screen.queryByText("Setup checklist")).not.toBeInTheDocument();
+    expect(mockGet).toHaveBeenCalledWith("/payroll/overview", { params: {} });
   });
 
   it("shows KPIs, Draft money per currency, the current run, exceptions with Fix links and deadlines", async () => {

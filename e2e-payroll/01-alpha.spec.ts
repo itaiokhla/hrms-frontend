@@ -3,7 +3,7 @@ import { execFileSync } from "node:child_process";
 import path from "node:path";
 
 import {
-  BACKEND, BRAND, account, api, company, completeStepUpModal, db, evidencePath, expect, expectDenied, expectNoForeignBrand,
+  BACKEND, BRAND, api, company, completeStepUpModal, db, evidencePath, expect, expectDenied, expectNoForeignBrand,
   expectNoUnmaskedBankData, login, mainText, settle, shot, step, test, writeEvidence,
 } from "./support";
 import { digits, financialRow, money } from "./money";

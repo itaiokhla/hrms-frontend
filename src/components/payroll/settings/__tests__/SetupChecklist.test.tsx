@@ -10,6 +10,14 @@ import { useSession } from "@/store/session";
 import { SetupChecklist } from "../SetupChecklist";
 import type { SettingValueItem, ValuesResponse } from "../types";
 
+// The overview page opens its "new run" sheet through useModalRoute (Next's app router hooks).
+jest.mock("next/navigation", () => ({
+  useRouter: () => ({ push: jest.fn(), replace: jest.fn(), back: jest.fn() }),
+  usePathname: () => "/payroll",
+  useSearchParams: () => new URLSearchParams(),
+  useParams: () => ({}),
+}));
+
 const values = jest.fn();
 jest.mock("../settingsApi", () => {
   const actual = jest.requireActual("../settingsApi");
@@ -67,19 +75,28 @@ describe("SetupChecklist", () => {
 });
 
 describe("Payroll overview shell", () => {
-  it("shows the checklist and the legacy link to a legacy payroll manager with configuration access", async () => {
+  // The Payroll page is now the KPI overview for anyone who reads pay runs (payroll:read or payroll.run.read;
+  // covered in runs/__tests__/overview.test.tsx, including a legacy payroll manager's header links). A legacy
+  // payroll preparer with configuration access but no pay-run read keeps this shell: the real setup checklist,
+  // the pages of the role, and the Payroll settings and Legacy payroll links in the header.
+  it("shows the checklist and the legacy link to a legacy payroll preparer with configuration access", async () => {
     act(() =>
       useSession.setState({
-        me: me({ [P.PAYROLL_READ]: ["COMPANY"], [P.PAYROLL_RUN_READ]: ["COMPANY"], [P.PAYROLL_CONFIGURATION_READ]: ["COMPANY"] }),
+        me: me({ [P.PAYROLL_PREPARE]: ["COMPANY"], [P.PAYROLL_CONFIGURATION_READ]: ["COMPANY"] }),
         status: "authenticated",
       }),
     );
     render(<PayrollOverviewPage />);
     expect(screen.getByRole("heading", { name: "Payroll", level: 1 })).toBeInTheDocument();
     expect(screen.getAllByRole("link", { name: /Legacy payroll|Open legacy payroll/ })[0]).toHaveAttribute("href", "/payroll/legacy");
-    for (const link of screen.getAllByRole("link", { name: /Payroll settings/ })) expect(link).toHaveAttribute("href", "/settings/payroll/general");
+    const settingsLinks = screen.getAllByRole("link", { name: /Payroll settings/ });
+    expect(settingsLinks.length).toBeGreaterThan(0);
+    for (const link of settingsLinks) expect(link).toHaveAttribute("href", "/settings/payroll/general");
     expect(await screen.findByText("Decisions for your payroll setup")).toBeInTheDocument();
-    // No KPI figures before a pay run exists.
+    expect(values).toHaveBeenCalledWith({ scope_type: "TENANT", scope_id: null });
+    expect(screen.getByText("Your payroll pages")).toBeInTheDocument();
+    // No KPI figures without pay-run access.
+    expect(screen.queryByText("Total employees")).not.toBeInTheDocument();
     expect(screen.queryByText(/₹|INR \d/)).not.toBeInTheDocument();
   });
 
