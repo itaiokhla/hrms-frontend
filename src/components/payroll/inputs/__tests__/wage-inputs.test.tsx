@@ -163,6 +163,32 @@ describe("Add wage input modal", () => {
     expect(typeof body.amount.amount).toBe("string");
   });
 
+  it("posts an incentive achievement measure without amount, units, rate or recurrence", async () => {
+    signIn(EDITOR);
+    routes();
+    mockSearch = new URLSearchParams("modal=wage-input");
+    mockPost.mockResolvedValue({ items: [{ id: 100, status: "PENDING_APPROVAL" }] });
+    render(<WageInputsPage />);
+    const dialog = await screen.findByRole("dialog", { name: "Add wage input" });
+    await waitFor(() => expect(within(dialog).getAllByRole("option", { name: /Asha Rao/ }).length).toBe(1));
+    fireEvent.change(within(dialog).getByLabelText(/^Employee/), { target: { value: "142" } });
+    fireEvent.change(within(dialog).getByLabelText(/Component code/), { target: { value: "incentive" } });
+    fireEvent.click(within(dialog).getByRole("radio", { name: "Incentive measure" }));
+    expect(within(dialog).queryByText("Repeat every period")).not.toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Submit for approval" }));
+    expect(await within(dialog).findAllByText("Enter the measure as a number, for example 118.5.")).not.toHaveLength(0);
+    fireEvent.change(within(dialog).getByLabelText(/^Achievement measure/), { target: { value: "118.5" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Submit for approval" }));
+    await waitFor(() => expect(mockPost).toHaveBeenCalled());
+    const [url, body] = mockPost.mock.calls[0];
+    expect(url).toBe("/payroll/wage-inputs");
+    expect(body).toMatchObject({ employee_id: 142, component_code: "INCENTIVE", measure: "118.5", submit: true });
+    expect(body).not.toHaveProperty("amount");
+    expect(body).not.toHaveProperty("units");
+    expect(body).not.toHaveProperty("rate");
+    expect(body).not.toHaveProperty("recurrence");
+  });
+
   it("shows a conflict banner with Reload when the draft changed elsewhere", async () => {
     signIn(EDITOR);
     mockGet.mockImplementation((url: string) => {

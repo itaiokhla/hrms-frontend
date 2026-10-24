@@ -303,7 +303,7 @@ function OneTimeTab({ refresh, onEdit, onAdd }: { refresh: number; onEdit: (id: 
           <MoneyText money={r.amount} />
         ) : (
           <span className="text-sm">
-            <Decimal value={r.units} suffix="units" />
+            <Decimal value={r.units} suffix={r.source === "INCENTIVE_PLAN" ? "measure" : "units"} />
             {r.rate && (
               <>
                 {" × "}

@@ -89,6 +89,8 @@ export interface WageInputBody {
   amount?: Money;
   units?: string;
   rate?: string;
+  /** Achievement measure of the employee's incentive plan (source INCENTIVE_PLAN; no amount, units or rate). */
+  measure?: string;
   currency?: string;
   reason?: string;
   external_ref?: string;

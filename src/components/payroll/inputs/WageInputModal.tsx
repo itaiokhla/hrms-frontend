@@ -33,7 +33,7 @@ function monthBounds(today = new Date()): { start: string; end: string } {
 interface FormState {
   employeeId: number | null;
   component: string;
-  mode: "amount" | "units";
+  mode: "amount" | "units" | "measure";
   amount: string;
   currency: string;
   units: string;
@@ -52,7 +52,7 @@ function initialState(currency: string, existing?: WageInput | null): FormState 
     return {
       employeeId: existing.employee_id,
       component: existing.component_code,
-      mode: existing.amount ? "amount" : "units",
+      mode: existing.source === "INCENTIVE_PLAN" ? "measure" : existing.amount ? "amount" : "units",
       amount: existing.amount?.amount ?? "",
       currency: existing.amount?.currency ?? existing.currency ?? currency,
       units: existing.units ?? "",
@@ -171,6 +171,8 @@ export function WageInputModal({ open, onOpenChange, inputId, employeeId, onSave
         if (parsed.ok) amount = parsed.amount;
         else next.amount = parsed.message;
       }
+    } else if (form.mode === "measure") {
+      if (!isDecimalString(form.units.trim())) next.units = "Enter the measure as a number, for example 118.5.";
     } else {
       if (!isDecimalString(form.units.trim())) next.units = "Enter the units as a number, for example 8.5.";
       if (form.rate.trim() && !isDecimalString(form.rate.trim())) next.rate = "Enter the rate as a number, or leave it empty to use the component's rate.";
@@ -179,7 +181,7 @@ export function WageInputModal({ open, onOpenChange, inputId, employeeId, onSave
       if (!form.periodStart) next.periodStart = "Choose the period start.";
       if (!form.periodEnd) next.periodEnd = "Choose the period end.";
       if (form.periodStart && form.periodEnd && form.periodEnd < form.periodStart) next.periodEnd = "The period ends before it starts.";
-      if (form.recurring && !form.until) next.until = "Choose the last period this input repeats in.";
+      if (form.recurring && form.mode !== "measure" && !form.until) next.until = "Choose the last period this input repeats in.";
     }
     setErrors(next);
     return { ok: Object.values(next).every((m) => !m), amount };
@@ -196,7 +198,7 @@ export function WageInputModal({ open, onOpenChange, inputId, employeeId, onSave
         if (form.mode === "amount") body.amount = { amount: amount!, currency: form.currency };
         else {
           body.units = form.units.trim();
-          if (form.rate.trim()) body.rate = form.rate.trim();
+          if (form.mode === "units" && form.rate.trim()) body.rate = form.rate.trim();
         }
         await wageInputsApi.update(existing.id, body);
         if (submit) await wageInputsApi.submit(existing.id);
@@ -210,13 +212,14 @@ export function WageInputModal({ open, onOpenChange, inputId, employeeId, onSave
           submit,
         };
         if (form.mode === "amount") body.amount = { amount: amount!, currency: form.currency };
+        else if (form.mode === "measure") body.measure = form.units.trim();
         else {
           body.units = form.units.trim();
           if (form.rate.trim()) body.rate = form.rate.trim();
         }
         if (form.reason.trim()) body.reason = form.reason.trim();
         if (form.externalRef.trim()) body.external_ref = form.externalRef.trim();
-        if (form.recurring && form.until) body.recurrence = { until: form.until };
+        if (form.recurring && form.mode !== "measure" && form.until) body.recurrence = { until: form.until };
         const result = await wageInputsApi.create(body, idempotencyKey.current);
         const n = result.items?.length ?? 1;
         const pending = result.items?.some((r) => r.status === "PENDING_APPROVAL");
@@ -328,7 +331,7 @@ export function WageInputModal({ open, onOpenChange, inputId, employeeId, onSave
           <fieldset className="space-y-3">
             <legend className="text-[13px] font-medium">Value</legend>
             <div role="radiogroup" aria-label="Value type" className="inline-flex rounded-xl border border-border p-1">
-              {(["amount", "units"] as const).map((m) => (
+              {(["amount", "units", "measure"] as const).map((m) => (
                 <button
                   key={m}
                   type="button"
@@ -338,7 +341,7 @@ export function WageInputModal({ open, onOpenChange, inputId, employeeId, onSave
                   onClick={() => set("mode", m)}
                   className={`min-h-[40px] rounded-lg px-4 text-sm font-medium ${form.mode === m ? "bg-primary-soft text-foreground" : "text-muted-foreground"}`}
                 >
-                  {m === "amount" ? "Amount" : "Units × rate"}
+                  {m === "amount" ? "Amount" : m === "units" ? "Units × rate" : "Incentive measure"}
                 </button>
               ))}
             </div>
@@ -351,6 +354,15 @@ export function WageInputModal({ open, onOpenChange, inputId, employeeId, onSave
                   <Input dir="ltr" maxLength={3} value={form.currency} disabled={editing} onChange={(e) => set("currency", e.target.value.toUpperCase())} />
                 </Field>
               </div>
+            ) : form.mode === "measure" ? (
+              <Field
+                label="Achievement measure"
+                required
+                error={errors.units}
+                hint="In the unit of your incentive plan's targets. The plan's formula turns approved measures into the incentive; measures are always approved first."
+              >
+                <Input inputMode="decimal" dir="ltr" value={form.units} onChange={(e) => set("units", e.target.value)} />
+              </Field>
             ) : (
               <div className="grid gap-3 sm:grid-cols-2">
                 <Field label="Units" required error={errors.units} hint="Hours, days or pieces">
@@ -381,7 +393,7 @@ export function WageInputModal({ open, onOpenChange, inputId, employeeId, onSave
               <Field label="External reference" error={errors.externalRef} hint="Your own ID; a second input with the same reference is refused.">
                 <Input maxLength={100} value={form.externalRef} onChange={(e) => set("externalRef", e.target.value)} />
               </Field>
-              {!editing && (
+              {!editing && form.mode !== "measure" && (
                 <>
                   <div className="flex min-h-[44px] items-center justify-between gap-3">
                     <span id="wi-recurring" className="text-sm">
@@ -415,6 +427,7 @@ function mapFields(fields: Record<string, string>): Record<string, string> {
     period_end: "periodEnd",
     external_ref: "externalRef",
     recurrence: "until",
+    measure: "units",
   };
   const out: Record<string, string> = {};
   Object.entries(fields).forEach(([k, v]) => {
