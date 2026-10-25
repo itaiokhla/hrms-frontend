@@ -69,11 +69,14 @@ export const P = {
   PAYROLL_REIMBURSEMENTS_APPROVE: "payroll:reimbursements:approve",
   PAYROLL_TAX_PROFILE_READ: "payroll:tax_profile:read",
   PAYROLL_TAX_PROFILE_VERIFY: "payroll:tax_profile:verify",
+  PAYROLL_TAX_PROFILE_EDIT: "payroll:tax_profile:edit",
+  PAYROLL_TAX_PROFILE_REVIEW: "payroll:tax_profile:review",
   PAYROLL_STATUTORY_REVIEW: "payroll:statutory:review",
   PAYROLL_STATUTORY_SUBMIT: "payroll:statutory:submit",
   PAYROLL_REPORTS_READ: "payroll:reports:read",
   PAYROLL_REPORTS_EXPORT: "payroll:reports:export",
   PAYROLL_AUDIT_READ: "payroll:audit:read",
+  PAYROLL_LEGAL_HOLD_MANAGE: "payroll:legal_hold:manage",
   PAYROLL_READ: "payroll:read",
   PAYROLL_PREPARE: "payroll:prepare",
   PAYROLL_APPROVE: "payroll:approve",
@@ -100,6 +103,7 @@ export const P = {
   SETTINGS_READ: "settings:read",
   SETTINGS_MANAGE: "settings:manage",
   SETTINGS_APPROVE_CHANGES: "settings:approve_changes",
+  SETTINGS_PARTNER_ACCESS_MANAGE: "settings:partner_access:manage",
   AUDIT_READ: "audit:read",
   BRANDING_MANAGE: "branding:manage",
   DOMAIN_MANAGE: "domain:manage",
@@ -1221,6 +1225,33 @@ export const PERMISSION_META: Record<PermissionCode, PermissionMeta> = {
     "payroll_confidential": true,
     "deprecated": false
   },
+  "payroll:tax_profile:edit": {
+    "module": "Payroll",
+    "label": "Submit tax declarations",
+    "description": "Submit and update your own tax declarations and proofs.",
+    "sensitivity": "restricted",
+    "scopes": [
+      "SELF"
+    ],
+    "full_access_scopes": [
+      "SELF"
+    ],
+    "payroll_confidential": true,
+    "deprecated": false
+  },
+  "payroll:tax_profile:review": {
+    "module": "Payroll",
+    "label": "Review tax declarations",
+    "description": "Review, approve or reject tax declarations and proofs submitted by employees of a legal entity.",
+    "sensitivity": "restricted",
+    "scopes": [
+      "LEGAL_ENTITY",
+      "COMPANY"
+    ],
+    "full_access_scopes": [],
+    "payroll_confidential": true,
+    "deprecated": false
+  },
   "payroll:statutory:review": {
     "module": "Payroll",
     "label": "Review statutory filings",
@@ -1287,6 +1318,18 @@ export const PERMISSION_META: Record<PermissionCode, PermissionMeta> = {
       "COMPANY"
     ],
     "payroll_confidential": false,
+    "deprecated": false
+  },
+  "payroll:legal_hold:manage": {
+    "module": "Payroll",
+    "label": "Manage legal holds",
+    "description": "Place legal holds on payroll documents and release them (releasing needs a second person and a recent step-up), run the retention sweep and process employee erasure requests.",
+    "sensitivity": "restricted",
+    "scopes": [
+      "COMPANY"
+    ],
+    "full_access_scopes": [],
+    "payroll_confidential": true,
     "deprecated": false
   },
   "payroll:read": {
@@ -1669,6 +1712,20 @@ export const PERMISSION_META: Record<PermissionCode, PermissionMeta> = {
     "module": "Administration",
     "label": "Approve setting changes",
     "description": "Approve or reject changes to sensitive settings made by someone else.",
+    "sensitivity": "confidential",
+    "scopes": [
+      "COMPANY"
+    ],
+    "full_access_scopes": [
+      "COMPANY"
+    ],
+    "payroll_confidential": false,
+    "deprecated": false
+  },
+  "settings:partner_access:manage": {
+    "module": "Administration",
+    "label": "Manage partner access",
+    "description": "Grant and revoke time-boxed, read-only access for the company's partner (reseller or bureau).",
     "sensitivity": "confidential",
     "scopes": [
       "COMPANY"

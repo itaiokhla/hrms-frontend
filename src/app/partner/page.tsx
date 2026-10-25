@@ -1,10 +1,11 @@
 "use client";
 
-import { Building2, Briefcase, Lock, LogOut, Palette, Rocket } from "lucide-react";
+import { Building2, Briefcase, KeyRound, Lock, LogOut, Palette, Rocket } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import toast from "react-hot-toast";
 
+import { PartnerDelegations } from "@/components/settings/partner-access/PartnerDelegations";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Switch } from "@/components/ui/field";
 import { DataTable, EmptyState, PageHeader, StatCard, TabPanel, Tabs } from "@/components/ui/layout";
@@ -84,6 +85,7 @@ export default function PartnerConsole() {
         <Tabs tabs={[
           { value: "clients", label: <span className="flex items-center gap-1.5"><Building2 className="h-4 w-4" /> Clients</span> },
           { value: "brand", label: <span className="flex items-center gap-1.5"><Palette className="h-4 w-4" /> Partner brand</span> },
+          { value: "delegated", label: <span className="flex items-center gap-1.5"><KeyRound className="h-4 w-4" /> Delegated access</span> },
         ]} value={tab} onValueChange={setTab}>
           <TabPanel value="clients">
             <div className="mb-6 grid gap-4 sm:grid-cols-2">
@@ -105,6 +107,9 @@ export default function PartnerConsole() {
                 ]} />
               )}
             </Card>
+          </TabPanel>
+          <TabPanel value="delegated">
+            <PartnerDelegations />
           </TabPanel>
           <TabPanel value="brand">
             {brand && <BrandEditor key={`${brand.brand?.version ?? 0}-${brand.brand_draft?.row_version ?? 0}`} data={brand} onSaved={load} />}

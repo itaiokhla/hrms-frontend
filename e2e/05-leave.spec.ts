@@ -99,7 +99,9 @@ test("Self-approval, rejection with a reason, cancellation and guardrails", asyn
   });
 
   await step(page, "Asking for more days than her balance allows is refused", async () => {
-    await apply(page, "Casual Leave", inDays(40), inDays(52), "Trip");
+    // Payroll v2 counts leave in working days (3.4 §7.1, EC-LV-10), not calendar days: 21 calendar days always
+    // hold 15 weekdays, more than the 9 Casual days left whatever weekday the suite runs on.
+    await apply(page, "Casual Leave", inDays(40), inDays(60), "Trip");
     await toast(page, /Insufficient Casual Leave balance/);
     await page.keyboard.press("Escape");
   });

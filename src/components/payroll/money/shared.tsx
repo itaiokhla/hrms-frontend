@@ -206,6 +206,7 @@ export const FLAG_LABELS: Record<string, string> = {
   NEW_IP: "New network address",
   VELOCITY_LIMIT: "Too many changes in 90 days",
   HR_CHANGE: "Entered by HR",
+  NOMINEE_PAYEE: "Nominee of a deceased employee",
 };
 
 export function flagLabel(code: string): string {
@@ -366,6 +367,8 @@ export function useTab<T extends string>(allowed: readonly T[], fallback: T): [T
 /* ------------------------------------------------------------------ payments sub-navigation */
 
 export const PAYMENT_PERMS = [P.PAYROLL_PAYMENT_PREPARE, P.PAYROLL_PAYMENT_APPROVE, P.PAYROLL_PAYMENT_SUBMIT, P.PAYROLL_PAYMENT_RECONCILE];
+/** Nominees of a deceased employee's final settlement: anyone who reads, edits or approves bank details. */
+export const NOMINEE_PERMS = [P.PAYROLL_BANK_DETAILS_READ_MASKED, P.PAYROLL_BANK_DETAILS_EDIT, P.PAYROLL_BANK_DETAILS_APPROVE];
 
 /** Payout Files · Reconciliation · Funding accounts, each shown only to people who can use it. */
 export function PaymentsNav() {
@@ -375,6 +378,7 @@ export function PaymentsNav() {
     { href: "/payroll/payments", label: "Payout files", show: canAny(me, PAYMENT_PERMS), active: pathname === "/payroll/payments" || pathname.startsWith("/payroll/payments/batches") || pathname.startsWith("/payroll/payments/instructions") || pathname === "/payroll/payments/new" },
     { href: "/payroll/payments/reconciliation", label: "Reconciliation", show: can(me, P.PAYROLL_PAYMENT_RECONCILE), active: pathname.startsWith("/payroll/payments/reconciliation") },
     { href: "/payroll/payments/funding-accounts", label: "Funding accounts", show: can(me, P.PAYROLL_FUNDING_ACCOUNTS_MANAGE), active: pathname.startsWith("/payroll/payments/funding-accounts") },
+    { href: "/payroll/payments/nominees", label: "Nominees", show: canAny(me, NOMINEE_PERMS), active: pathname.startsWith("/payroll/payments/nominees") },
   ].filter((i) => i.show);
   if (items.length < 2) return null;
   return (

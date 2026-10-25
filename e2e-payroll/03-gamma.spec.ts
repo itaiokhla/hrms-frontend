@@ -1,5 +1,5 @@
 import {
-  BRAND, api, company, db, expect, expectDenied, expectNoForeignBrand, login, mainText, settle, shot, step, test, writeEvidence,
+  BRAND, api, company, creds, db, expect, expectDenied, expectNoForeignBrand, login, mainText, settle, shot, step, test, writeEvidence,
 } from "./support";
 import { digits, financialRow, money } from "./money";
 
@@ -15,6 +15,17 @@ const RUN = G.runs.finalized.id;
 const DRAFT = G.runs.draft.id;
 const people = (G as any).people as Record<string, { employee_id: number; user_id: number | null; name: string }>;
 const byName = (name: string) => db("run_employees", { run_id: RUN }).find((r) => r.name === name)!;
+const LEAVER = (creds().anchors as { leavers: Record<string, string> }).leavers.gamma;
+/** Mon-Fri days from the period start (Mon 19 Oct 2026) to the leaving day, both included. */
+const LEAVER_DAYS = (() => {
+  let n = 0;
+  for (let d = new Date("2026-10-19T00:00:00Z"); d <= new Date(`${LEAVER}T00:00:00Z`); d.setUTCDate(d.getUTCDate() + 1)) {
+    if (d.getUTCDay() !== 0 && d.getUTCDay() !== 6) n += 1;
+  }
+  return n;
+})();
+// Exact cents: hours x 3150 cents per hour.
+const LIAM_GROSS = ((LEAVER_DAYS * 8 * 3150) / 100).toFixed(2);
 
 test("G01-G02 branding, USD and the bi-weekly run", async ({ browser }, testInfo) => {
   const admin = await login(browser, testInfo, "gamma", "admin");
@@ -52,8 +63,10 @@ test("G03-G08 hourly, overtime, task pay, bonus, commission, joiner and leaver (
     // CALENDAR_DAYS (company setting): 21 Oct .. 1 Nov = 12 of 14 days -> 2,850 x 12 / 14 = 2,442.857142... -> 2,442.86;
     // approved commission 1,340.00 -> gross 3,782.86.
     ["Chloe Nguyen", "gross (joiner 12/14 calendar days + commission)", "3782.86", money(byName("Chloe Nguyen").gross)],
-    // Liam Turner, hourly 31.50, leaver 22 Oct: employed Mon 19 .. Thu 22 = 4 working days x 8 h = 32 h -> 1,008.00.
-    ["Liam Turner", "gross (leaver: 32 h x 31.50)", "1008.00", money(byName("Liam Turner").gross)],
+    // Liam Turner, hourly 31.50, leaver on the seed's anchor date (the day before the seed ran: anchors.leavers.gamma).
+    // Employed Mon 19 Oct .. the leaving day; each Mon-Fri working day is 8 h. Seeded on 23 Oct -> leaver 22 Oct ->
+    // 4 days = 32 h x 31.50 = 1,008.00; seeded on 24 Oct -> leaver 23 Oct -> 5 days = 40 h x 31.50 = 1,260.00.
+    ["Liam Turner", `gross (leaver ${LEAVER}: ${LEAVER_DAYS * 8} h x 31.50)`, LIAM_GROSS, money(byName("Liam Turner").gross)],
     // Jessica Davis, salaried 4,800.00 + approved bonus 750.00 = 5,550.00.
     ["Jessica Davis", "gross (salary + bonus)", "5550.00", money(byName("Jessica Davis").gross)],
     // Sarah Johnson, salaried 4,200.00 + approved claim 86.40 (reimbursement, not earnings) -> net 4,286.40.

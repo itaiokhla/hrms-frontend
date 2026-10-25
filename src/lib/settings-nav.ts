@@ -72,6 +72,7 @@ export const SETTINGS_NAV: SettingsNavGroup[] = [
     label: "Security",
     items: [
       { label: "Roles & access", href: "/roles", external: true, visible: (me) => can(me, P.ROLE_READ) },
+      { label: "Partner access", href: "/settings/partner-access", visible: (me) => can(me, P.SETTINGS_PARTNER_ACCESS_MANAGE) },
       {
         label: "Settings change requests",
         href: `${PAYROLL_SETTINGS_BASE}/${CHANGE_REQUESTS_SLUG}`,

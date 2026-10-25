@@ -49,6 +49,8 @@ export interface BankAccount {
   payee_type: string;
   payee_id: number;
   employee_id: number | null;
+  /** The nominee of a deceased employee's final settlement (payee_type NOMINEE), else null. */
+  nominee_id?: number | null;
   holder_name: string;
   country: string;
   currency: string;
@@ -117,6 +119,9 @@ export interface BankChangeRequest {
   payee_type: string;
   payee_id: number;
   employee_id: number | null;
+  nominee_id?: number | null;
+  /** Who a NOMINEE account is for, what the proof document is and the share (staff view only). */
+  nominee?: { id: number; kind: string; name: string; relationship: string; proof_ref: string; share_percent: string; country: string; status: string; employee_id: number; final_settlement_case_id: number } | null;
   kind: "ADD" | "REPLACE" | string;
   replaces_account_id: number | null;
   channel: "SELF" | "HR" | "BUREAU" | string;

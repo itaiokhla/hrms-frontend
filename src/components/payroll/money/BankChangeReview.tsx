@@ -143,7 +143,7 @@ function DecisionForm({ change, mode, onCancel, onDone }: { change: BankChangeRe
           <span>I have checked the risk flags ({flags.map((f) => flagLabel(f.code)).join(", ")}) with the employee.</span>
         </label>
       )}
-      {mode === "approve" && (
+      {mode === "approve" && change.payee_type !== "NOMINEE" && (
         <div className="space-y-2">
           <label className="flex min-h-[44px] items-center gap-2 text-sm">
             <input type="checkbox" className="h-4 w-4" checked={waive} onChange={(e) => setWaive(e.target.checked)} />
@@ -202,7 +202,14 @@ export function BankChangeBody({ change, onChanged }: { change: BankChangeReques
       </div>
 
       <dl className="grid gap-4 sm:grid-cols-3">
-        <Meta label="Employee">{employees.name(change.employee_id)}</Meta>
+        {change.nominee ? (
+          <Meta label="Payee (nominee of a deceased employee)">
+            {change.nominee.name} · {change.nominee.relationship} · {change.nominee.share_percent}% of the settlement
+            <span className="block text-xs text-muted-foreground">Proof: {change.nominee.proof_ref}</span>
+          </Meta>
+        ) : (
+          <Meta label="Employee">{employees.name(change.employee_id)}</Meta>
+        )}
         <Meta label="Requested">
           {fmtDateTime(change.created_at)} by {userName(change.requested_by_user_id)}
         </Meta>

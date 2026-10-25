@@ -2,7 +2,7 @@
 // Source of truth: hrms-backend/app/payroll/settings_registry.py and app/payroll/policy_types.py
 
 export const SETTINGS_REGISTRY_VERSION = "2026.10.3";
-export const SETTINGS_FINGERPRINT = "cb73c2c0d75a2acc49e029356ed1b3ca76bfc23ea83cd16ded4ebfe6d0033d47";
+export const SETTINGS_FINGERPRINT = "320f915258fca118d3d266e73a4edfe1851828fa38e4ed9f3ea8bb53eebca30e";
 
 export type SettingLevel = "EMPLOYEE" | "PAY_GROUP" | "BRANCH" | "LEGAL_ENTITY" | "TENANT" | "PARTNER" | "COUNTRY_PACK" | "PLATFORM";
 export type ScopeLevel = "TENANT" | "LEGAL_ENTITY" | "BRANCH" | "PAY_GROUP" | "EMPLOYEE";
@@ -291,6 +291,7 @@ export const SETTING_KEYS = [
   "payroll.payments.bank_file_format",
   "payroll.payments.funding_account_id",
   "payroll.payments.batch_max_items",
+  "payroll.payments.unclaimed_after_days",
   "payroll.payments.reissue_requires_approval",
   "payroll.bank.self_service_enabled",
   "payroll.bank.change_requires_approval",
@@ -4405,6 +4406,46 @@ export const SETTING_DEFINITIONS: Record<SettingKey, SettingDefinition> = {
     "decisionRequired": false,
     "failsClosed": true
   },
+  "payroll.payments.unclaimed_after_days": {
+    "key": "payroll.payments.unclaimed_after_days",
+    "type": "int",
+    "default": null,
+    "derivedDefault": null,
+    "allowedLevels": [
+      "TENANT",
+      "LEGAL_ENTITY"
+    ],
+    "module": "Payroll",
+    "section": "Payments & banking",
+    "sectionSlug": "payments",
+    "label": "Mark unpaid pay as unclaimed after",
+    "help": "Company policy, off when empty: net pay that is still unpaid this many days after its pay date, with nothing in flight (never sent, failed, returned or rejected), is moved to UNCLAIMED by a daily job. Unsent payments are held, finance and the employee are notified, and a person releases it again with a reason. Nothing is paid or deleted. Escheatment (unclaimed property) rules are country-specific and are not implemented: this is a company policy value, not a legal limit.",
+    "constraints": {
+      "min": 1,
+      "max": 3650,
+      "nullable": true
+    },
+    "dependsOn": [],
+    "resolutionGrain": "PERIOD",
+    "effectiveDated": true,
+    "sensitivity": "standard",
+    "requiresApproval": true,
+    "adminOnly": false,
+    "lockable": true,
+    "statutoryScheme": null,
+    "aliases": [],
+    "ui": {
+      "control": "number",
+      "group": "Payments",
+      "unit": "days",
+      "order": 50
+    },
+    "newTenantDefault": null,
+    "supportStatus": "SUPPORTED",
+    "legalSensitivity": "NONE",
+    "decisionRequired": false,
+    "failsClosed": true
+  },
   "payroll.payments.reissue_requires_approval": {
     "key": "payroll.payments.reissue_requires_approval",
     "type": "bool",
@@ -4432,7 +4473,7 @@ export const SETTING_DEFINITIONS: Record<SettingKey, SettingDefinition> = {
     "ui": {
       "control": "switch",
       "group": "Payments",
-      "order": 50
+      "order": 60
     },
     "newTenantDefault": true,
     "supportStatus": "SUPPORTED",
@@ -4467,7 +4508,7 @@ export const SETTING_DEFINITIONS: Record<SettingKey, SettingDefinition> = {
     "ui": {
       "control": "switch",
       "switch_card": true,
-      "order": 60
+      "order": 70
     },
     "newTenantDefault": true,
     "supportStatus": "SUPPORTED",
@@ -4502,7 +4543,7 @@ export const SETTING_DEFINITIONS: Record<SettingKey, SettingDefinition> = {
     "ui": {
       "control": "switch",
       "group": "Bank accounts",
-      "order": 70
+      "order": 80
     },
     "newTenantDefault": true,
     "supportStatus": "SUPPORTED",
@@ -4541,7 +4582,7 @@ export const SETTING_DEFINITIONS: Record<SettingKey, SettingDefinition> = {
       "control": "number",
       "group": "Bank accounts",
       "unit": "hours",
-      "order": 80
+      "order": 90
     },
     "newTenantDefault": 48,
     "supportStatus": "SUPPORTED",
@@ -4576,7 +4617,7 @@ export const SETTING_DEFINITIONS: Record<SettingKey, SettingDefinition> = {
     "ui": {
       "control": "switch",
       "switch_card": true,
-      "order": 90
+      "order": 100
     },
     "newTenantDefault": true,
     "supportStatus": "SUPPORTED",
@@ -4611,7 +4652,7 @@ export const SETTING_DEFINITIONS: Record<SettingKey, SettingDefinition> = {
     "ui": {
       "control": "switch",
       "switch_card": true,
-      "order": 100
+      "order": 110
     },
     "newTenantDefault": true,
     "supportStatus": "SUPPORTED",
@@ -4657,7 +4698,7 @@ export const SETTING_DEFINITIONS: Record<SettingKey, SettingDefinition> = {
     "ui": {
       "control": "checkboxes",
       "group": "Bank accounts",
-      "order": 110
+      "order": 120
     },
     "newTenantDefault": [
       "FORMAT",
@@ -4695,7 +4736,7 @@ export const SETTING_DEFINITIONS: Record<SettingKey, SettingDefinition> = {
     "ui": {
       "control": "switch",
       "switch_card": true,
-      "order": 120
+      "order": 130
     },
     "newTenantDefault": false,
     "supportStatus": "SUPPORTED",
@@ -4732,7 +4773,7 @@ export const SETTING_DEFINITIONS: Record<SettingKey, SettingDefinition> = {
     "ui": {
       "control": "number",
       "group": "Bank accounts",
-      "order": 130
+      "order": 140
     },
     "newTenantDefault": 2,
     "supportStatus": "SUPPORTED",

@@ -12,6 +12,8 @@ import { NextResponse, type NextRequest } from "next/server";
  */
 const PUBLIC = [
   "/login", "/signup", "/forgot-password", "/verify-otp", "/reset-password", "/accept-invite", "/platform", "/partner", "/auth/handoff",
+  // Public document verification printed on payslips (EC-DOC-18): no session needed.
+  "/verify",
   "/manifest.webmanifest",
 ];
 const PLATFORM_HOSTS = (process.env.PLATFORM_HOSTS || "localhost,127.0.0.1")

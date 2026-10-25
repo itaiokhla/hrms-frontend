@@ -97,6 +97,10 @@ export function SettingsSection({ section }: { section: SettingSection }) {
   const [reason, setReason] = useState("");
   const [drafts, setDrafts] = useState<Record<string, DraftValue>>({});
   const [locks, setLocks] = useState<Record<string, boolean>>({});
+  // The row version each edited key had when the person started editing it (EC-UX-04). Values are re-read when the
+  // effective date changes; saving with the re-read version would silently overwrite a change someone else made in
+  // the meantime, so the save carries the version the edit was based on and the API answers 409 if it moved.
+  const [bases, setBases] = useState<Record<string, number>>({});
   const [errors, setErrors] = useState<Record<string, string[]>>({});
   const [problem, setProblem] = useState<SaveProblem | null>(null);
   const [results, setResults] = useState<SaveChangeResult[]>([]);
@@ -123,10 +127,17 @@ export function SettingsSection({ section }: { section: SettingSection }) {
   useEffect(() => {
     setDrafts({});
     setLocks({});
+    setBases({});
     setErrors({});
     setProblem(null);
     setResults([]);
   }, [scope.scope_type, scope.scope_id, section.slug]);
+
+  const rememberBase = (key: string) => {
+    const version = items.get(key)?.row_version;
+    if (version === undefined) return;
+    setBases((b) => (key in b ? b : { ...b, [key]: version }));
+  };
 
   const draftOf = (def: SettingDefinition): DraftValue => (def.key in drafts ? drafts[def.key] : toDraft(def, items.get(def.key)?.value));
   const lockedOf = (key: string): boolean => (key in locks ? locks[key] : items.get(key)?.here?.locked ?? false);
@@ -197,6 +208,7 @@ export function SettingsSection({ section }: { section: SettingSection }) {
   const discard = () => {
     setDrafts({});
     setLocks({});
+    setBases({});
     setErrors({});
     setProblem(null);
   };
@@ -224,7 +236,7 @@ export function SettingsSection({ section }: { section: SettingSection }) {
         scope_type: scope.scope_type,
         scope_id: scope.scope_type === "TENANT" ? null : scope.scope_id,
         value: parsed.value,
-        row_version: item.row_version,
+        row_version: key in bases ? bases[key] : item.row_version,
         ...(def.effectiveDated ? { effective_from: effectiveFrom } : {}),
         ...(reason.trim() ? { reason: reason.trim() } : {}),
         ...(lockChanged ? { locked: locks[key] } : {}),
@@ -258,6 +270,7 @@ export function SettingsSection({ section }: { section: SettingSection }) {
       setResults(result.changes.filter((c) => c.status !== "UNCHANGED"));
       setDrafts({});
       setLocks({});
+      setBases({});
       setReason("");
       if (result.warnings.length) setProblem({ kind: "invalid", message: "Saved with warnings.", issues: result.warnings });
       void values.reload();
@@ -393,6 +406,7 @@ export function SettingsSection({ section }: { section: SettingSection }) {
                       item={item}
                       draft={draftOf(def)}
                       onDraft={(v) => {
+                        rememberBase(def.key);
                         setDrafts((d) => ({ ...d, [def.key]: v }));
                         setErrors((e) => {
                           if (!(def.key in e)) return e;
@@ -403,7 +417,10 @@ export function SettingsSection({ section }: { section: SettingSection }) {
                       }}
                       dirty={dirtyKeys.includes(def.key)}
                       locked={lockedOf(def.key)}
-                      onLocked={(v) => setLocks((l) => ({ ...l, [def.key]: v }))}
+                      onLocked={(v) => {
+                        rememberBase(def.key);
+                        setLocks((l) => ({ ...l, [def.key]: v }));
+                      }}
                       canLock={scope.scope_type !== "PAY_GROUP"}
                       canEdit={editable(def, item)}
                       readOnlyReason={readOnlyReason(def, item)}

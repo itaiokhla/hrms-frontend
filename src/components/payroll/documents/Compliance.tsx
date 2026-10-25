@@ -22,6 +22,7 @@ import type { Money } from "@/lib/money";
 import { statusEntry } from "@/lib/payroll/labels";
 import { P } from "@/lib/permissions.generated";
 
+import { ComplianceNav } from "../holds/Nav";
 import { complianceApi, fetchBlob, saveBlob } from "./api";
 import {
   ConflictBanner,
@@ -807,6 +808,7 @@ export function CompliancePage() {
             : "Statutory capability, filings and liabilities per legal entity."
         }
       />
+      <ComplianceNav active="statutory" />
       {error && !data ? (
         <ErrorState message={errorText(error)} onRetry={() => void reload()} />
       ) : loading && !data ? (

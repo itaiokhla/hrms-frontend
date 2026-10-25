@@ -46,7 +46,9 @@ test("Alpha: employee, HR and manager each see only what their role allows", asy
     await shot(hr.page, testInfo, "03-alpha-hr-email-only");
     await hr.page.goto("/settings/organization");
     await expect(hr.page.getByRole("heading", { name: "Legal entities & branches" })).toBeVisible();
-    await expect(hr.page.getByTestId("add-entity")).toHaveCount(0); // org:manage_entities is admin only
+    // Payroll v2 (3.9 §5.3, migration 0010): hr_admin holds org:* incl. org:manage_entities, so HR may add a
+    // legal entity; payroll data stays closed to HR (asserted above and in the Gamma test below).
+    await expect(hr.page.getByTestId("add-entity")).toBeVisible();
     await shot(hr.page, testInfo, "03-alpha-hr-organization");
 
     await signIn(manager.page, A.people.manager.email, S.password);

@@ -296,10 +296,16 @@ describe("My Payslips", () => {
 /* ------------------------------------------------------------------ My Tax */
 
 describe("My Tax", () => {
-  it("says plainly that tax self-service is not available yet", () => {
+  it("says plainly that tax self-service is not available for a country whose pack asks for nothing (form: tax/__tests__)", async () => {
     signIn(me());
+    serve({
+      "/me/payroll/tax-profile": {
+        available: false, reason: "NO_PACK_FIELDS", message: "Tax declarations are not available for your country yet.", can_edit: true,
+        schema: [], versions: [], current: null, pending: null, latest: null, pack: null, currency: null,
+      },
+    });
     render(<MyTaxRoute />);
-    expect(screen.getByText("Not available for your country yet")).toBeInTheDocument();
-    expect(mockGet).not.toHaveBeenCalled();
+    expect(await screen.findByText("Not available for your country yet")).toBeInTheDocument();
+    expect(mockGet).toHaveBeenCalledWith("/me/payroll/tax-profile");
   });
 });

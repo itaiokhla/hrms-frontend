@@ -394,7 +394,7 @@ export function BankAccountBody({ account, onChanged, compact = false }: { accou
           </Button>
         </div>
       )}
-      {approver && !own && !maker && coolingLeft && (
+      {approver && !own && !maker && coolingLeft && account.payee_type !== "NOMINEE" && (
         <div className="border-t border-border pt-4">
           <Button variant="secondary" className="min-h-[44px]" onClick={() => setDecision({ kind: "waive" })}>
             End cooling-off now…

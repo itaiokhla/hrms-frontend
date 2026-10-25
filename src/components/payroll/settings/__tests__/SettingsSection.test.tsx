@@ -167,6 +167,28 @@ describe("Settings › Payroll › Overtime", () => {
     expect(screen.getByText("No unsaved changes.")).toBeInTheDocument();
   });
 
+  it("EC-UX-04: a re-read after changing the effective date keeps the row version the edit was based on", async () => {
+    // Gate-chrome regression (24 Oct, Chrome): tab 2 edited a value, then picked a future effective date; the
+    // section re-read the values (now including tab 1's newer save, row version 4) and the save carried 4, so
+    // tab 1's value was overwritten without the conflict banner.
+    save.mockRejectedValue(
+      payrollError(409, {
+        code: "STALE_ROW_VERSION",
+        detail: { message: "Overtime pay was changed by someone else. Review the current value and save again.", key: "payroll.overtime.enabled", current: { value: true, row_version: 4 } },
+      }),
+    );
+    fireEvent.click(await renderSection()); // edit based on row version 3
+    values.mockResolvedValue(response([overtimeItem({ row_version: 4 })])); // someone else saved meanwhile
+    fireEvent.change(screen.getByLabelText("Effective from"), { target: { value: "2027-01-01" } });
+    await waitFor(() => expect(values).toHaveBeenCalledWith({ scope_type: "TENANT", scope_id: null, name: "Company" }, "2027-01-01"));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Save" })).toBeEnabled());
+    fireEvent.change(screen.getByLabelText(/^Reason/), { target: { value: "test" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
+    expect(save.mock.calls[0][0][0]).toMatchObject({ key: "payroll.overtime.enabled", row_version: 3, effective_from: "2027-01-01" });
+    expect(await screen.findByText("Someone else changed this")).toBeInTheDocument();
+  });
+
   it("shows V-xx validation issues next to the control and in the summary", async () => {
     save.mockRejectedValue(
       payrollError(400, {

@@ -1,20 +1,20 @@
 "use client";
 
 import { RequireAccess } from "@/components/access/Can";
-import { CompliancePage } from "@/components/payroll/documents/Compliance";
 import { DocsPage } from "@/components/payroll/documents/shared";
+import { ComplianceWorkspace, STATUTORY_CODES } from "@/components/payroll/tax/ComplianceWorkspace";
 import { canBeyondSelf } from "@/lib/access";
 import { P } from "@/lib/permissions.generated";
 
-/** The compliance page reads with statutory review, statutory submit or report access (compliance.READ_PERMISSIONS). */
-const COMPLIANCE_CODES = [P.PAYROLL_STATUTORY_REVIEW, P.PAYROLL_STATUTORY_SUBMIT, P.PAYROLL_REPORTS_READ];
+/** Statutory review, statutory submit or report access opens the statutory tab; tax review opens the declarations tab. */
+const COMPLIANCE_CODES = [...STATUTORY_CODES, P.PAYROLL_TAX_PROFILE_REVIEW];
 
-/** Payroll › Compliance (3.8 §5.15). */
+/** Payroll › Compliance (3.8 §5.15) with the tax declarations review tab. */
 export default function ComplianceRoute() {
   return (
     <RequireAccess check={(me) => COMPLIANCE_CODES.some((code) => canBeyondSelf(me, code))}>
       <DocsPage>
-        <CompliancePage />
+        <ComplianceWorkspace />
       </DocsPage>
     </RequireAccess>
   );

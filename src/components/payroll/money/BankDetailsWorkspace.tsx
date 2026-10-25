@@ -1,6 +1,7 @@
 "use client";
 
-import { Landmark, ShieldAlert, ShieldCheck } from "lucide-react";
+import { HeartHandshake, Landmark, ShieldAlert, ShieldCheck } from "lucide-react";
+import Link from "next/link";
 import { useState } from "react";
 
 import { useCan } from "@/components/access/Can";
@@ -17,7 +18,7 @@ import { P } from "@/lib/permissions.generated";
 import { AccountNumber, BankAccountModal } from "./BankAccountPanel";
 import { BankChangeModal } from "./BankChangeReview";
 import { bankApi } from "./api";
-import { CHANNEL_LABELS, FilterBar, HOLD_REASONS, LocalChip, WorkspaceHeader, flagLabel, humanize, useCountdown, useEmployeeDirectory, useTab } from "./shared";
+import { CHANNEL_LABELS, FilterBar, HOLD_REASONS, LocalChip, WorkspaceHeader, flagLabel, humanize, linkButton, useCountdown, useEmployeeDirectory, useTab } from "./shared";
 import type { BankAccount, BankChangeRequest } from "./types";
 
 const LIMIT = 50;
@@ -231,7 +232,11 @@ export function BankDetailsWorkspace() {
             ? "Verify new accounts, approve bank changes and clear risk flags. Account numbers stay masked unless you reveal them with a reason."
             : "Bank accounts of the people you can see. Account numbers stay masked."
         }
-       
+        actions={
+          <Link href="/payroll/payments/nominees" className={linkButton}>
+            <HeartHandshake className="h-4 w-4" aria-hidden /> Nominees of final settlements
+          </Link>
+        }
       />
       <Tabs
         value={tab}

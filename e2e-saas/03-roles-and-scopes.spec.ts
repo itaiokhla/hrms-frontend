@@ -88,7 +88,9 @@ test("Beta: the Operations Manager's role covers the Dubai branch only; payroll 
   await ops.close();
 
   const payroll = await as(browser, testInfo, B, "payroll");
-  await payroll.page.goto("/payroll");
+  // The seeded (legacy) payroll records live at /payroll/legacy since payroll v2 (decision I-11); /payroll is the
+  // v2 workspace, which lists every ISO currency in its filter, so it cannot show which currency the records use.
+  await payroll.page.goto("/payroll/legacy");
   await expect(payroll.page.getByText(/AED/).first()).toBeVisible();
   await expect(payroll.page.getByText("₹")).toHaveCount(0);
   await shot(payroll.page, testInfo, "03-beta-payroll-aed");
