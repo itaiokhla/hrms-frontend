@@ -62,6 +62,15 @@ export function noticeRequired(policy: AttendancePolicy): boolean {
 }
 
 /**
+ * Whether the lunch in progress is paid: the open break's own snapshot (stored when it started), not the company's
+ * current policy, which may have changed since (BUG-AS-17). Without an open break the fallback is returned.
+ */
+export function openBreakIsPaid(breaks: { ended_at: string | null; is_paid: boolean }[] | undefined, fallback: boolean): boolean {
+  const open = (breaks ?? []).find((b) => b.ended_at === null);
+  return open ? open.is_paid : fallback;
+}
+
+/**
  * Hours "now" from the server's provisional totals: the counters advance by the
  * time elapsed since the server computed them (never from the device clock alone).
  */

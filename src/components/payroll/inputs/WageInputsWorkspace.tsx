@@ -2,8 +2,8 @@
 
 import { FileUp, Plus } from "lucide-react";
 import Link from "next/link";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
 
 import { useCan } from "@/components/access/Can";
@@ -18,6 +18,7 @@ import { can, canAny } from "@/lib/access";
 import { useApi } from "@/lib/hooks";
 import { P } from "@/lib/permissions.generated";
 import { fmtDate } from "@/lib/format";
+import { useTabParam } from "@/lib/useTabParam";
 
 import { lookupsApi, overtimeApi, tasksApi, wageInputsApi } from "./api";
 import { ArrearsTab } from "./Arrears";
@@ -50,23 +51,8 @@ const LIMIT = 50;
 export const INPUT_TABS = ["one-time", "overtime", "tasks", "arrears", "imports"] as const;
 type InputTab = (typeof INPUT_TABS)[number];
 
-/** `?tab=` kept in the URL so a tab is bookmarkable; replace (not push) so Back leaves the page. */
-export function useTabParam<T extends string>(allowed: readonly T[], fallback: T): [T, (t: T) => void] {
-  const search = useSearchParams();
-  const router = useRouter();
-  const pathname = usePathname();
-  const raw = search?.get("tab") as T | null;
-  const tab = raw && allowed.includes(raw) ? raw : fallback;
-  const setTab = useCallback(
-    (t: T) => {
-      const next = new URLSearchParams(search?.toString() ?? "");
-      next.set("tab", t);
-      router.replace(`${pathname}?${next.toString()}`, { scroll: false });
-    },
-    [search, router, pathname],
-  );
-  return [tab, setTab];
-}
+// Promoted to src/lib (LH-M0 WI-0.7); re-exported for existing imports.
+export { useTabParam };
 
 export function usePayGroups(): PayGroupOption[] {
   const { me } = useCan();

@@ -49,5 +49,7 @@ next-env.d.ts
 /playwright-report-saas/
 /test-results-payroll/
 /playwright-report-payroll/
+/test-results-time/
+/playwright-report-time/
 /test-results-legacy-*/
 /test-evidence/

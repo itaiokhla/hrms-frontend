@@ -91,8 +91,120 @@ export interface Shift {
   start_time: string;
   end_time: string;
   duration_hours: number | null;
+  /** Unpaid part of the shift (BUG-AS-22); null = not set. */
+  unpaid_break_minutes?: number | null;
   is_flexible: boolean;
   is_active: boolean;
+  /* AS-M1 catalogue fields (03-shifts/01 §2.3); the times above are the legacy mirror of the version in force. */
+  code?: string;
+  kind?: ShiftKind;
+  /** `shift-1` … `shift-12`; always shown with the code text, never colour alone. */
+  color_token?: string;
+  status?: "ACTIVE" | "ARCHIVED";
+  legal_entity_id?: number | null;
+  branch_id?: number | null;
+  description?: string | null;
+  row_version?: number;
+  half_split_time?: string | null;
+  current_version_id?: number | null;
+  current_version?: ShiftVersion | null;
+}
+
+export type ShiftKind = "FIXED" | "FLEXIBLE" | "OPEN" | "SPLIT";
+
+export interface ShiftSegment {
+  kind: "WORK" | "ON_CALL";
+  start: string;
+  end: string;
+  next_day?: boolean | null;
+}
+
+export interface ShiftBreakRule {
+  kind: "LUNCH" | "REST" | "PERSONAL" | "OTHER";
+  mode: "PUNCHED" | "FIXED_WINDOW" | "FLOATING_WINDOW" | "AUTO_DEDUCT";
+  minutes: number;
+  paid: boolean;
+  start?: string | null;
+  end?: string | null;
+  window_start?: string | null;
+  window_end?: string | null;
+  next_day?: boolean;
+  auto_deduct_after_minutes?: number | null;
+}
+
+/** One effective-dated version of a shift (03-shifts/01 §3.2; `serialize_version`). */
+export interface ShiftVersion {
+  id: number;
+  shift_id: number;
+  version_no: number;
+  effective_from: string;
+  effective_to: string | null;
+  start_time: string | null;
+  end_time: string | null;
+  segments: ShiftSegment[];
+  break_rules: ShiftBreakRule[];
+  unpaid_break_minutes: number | null;
+  half_split_time: string | null;
+  core_start_time: string | null;
+  core_end_time: string | null;
+  expected_net_minutes: number | null;
+  grace_in_minutes: number | null;
+  grace_out_minutes: number | null;
+  early_in_window_minutes: number;
+  late_out_window_minutes: number;
+  anchor_timezone: string | null;
+  safety_critical: boolean;
+  outdoor: boolean;
+  long_duty: boolean;
+  crosses_midnight: boolean;
+  /** Decimal as text ("9.00"). */
+  duration_hours: string | null;
+  content_hash?: string;
+  reason: string | null;
+  voided_at: string | null;
+  created_at: string | null;
+}
+
+/** GET /shifts/{id}: the shift, every version (voided included), live usage and the owner's local today. */
+export interface ShiftDetail extends Shift {
+  code: string;
+  kind: ShiftKind;
+  color_token: string;
+  status: "ACTIVE" | "ARCHIVED";
+  row_version: number;
+  versions: ShiftVersion[];
+  usage: { rules: number; placements: number };
+  owner_today: string;
+}
+
+/** Who a shift assignment rule covers (AssignmentCriteria; `everyone` cannot be combined). */
+export interface ShiftRuleCriteria {
+  legal_entity_ids?: number[] | null;
+  branch_ids?: number[] | null;
+  pay_group_ids?: number[] | null;
+  department_ids?: number[] | null;
+  grade_ids?: number[] | null;
+  employment_types?: string[] | null;
+  designation_ids?: number[] | null;
+  employee_ids?: number[] | null;
+  everyone?: boolean | null;
+}
+
+/** One shift assignment rule (03-shifts/01 §12; `serialize_rule`). Higher priority wins. */
+export interface ShiftRule {
+  id: number;
+  name: string;
+  shift_id: number;
+  criteria: ShiftRuleCriteria;
+  priority: number;
+  effective_from: string;
+  effective_to: string | null;
+  legal_entity_id: number | null;
+  status: "ACTIVE" | "INACTIVE";
+  reason: string | null;
+  replaces_rule_id: number | null;
+  team_id_snapshot: number | null;
+  row_version: number;
 }
 
 export interface OrgNode {

@@ -94,7 +94,7 @@ describe("useModalRoute", () => {
     });
     expect(await screen.findByRole("dialog", { name: "Discard changes?" })).toBeInTheDocument();
     await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+      fireEvent.click(screen.getByRole("button", { name: "Keep editing" }));
     });
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     expect(replace).not.toHaveBeenCalled();
@@ -115,7 +115,7 @@ describe("useModalRoute", () => {
     act(() => setUrl("/payroll/runs"));
     expect(screen.getByTestId("state")).toHaveTextContent("open:7");
     await act(async () => {
-      fireEvent.click(await screen.findByRole("button", { name: "Cancel" }));
+      fireEvent.click(await screen.findByRole("button", { name: "Keep editing" }));
     });
     expect(push).toHaveBeenCalledWith("/payroll/runs?modal=hold&employee=7");
     expect(screen.getByTestId("state")).toHaveTextContent("open:7");

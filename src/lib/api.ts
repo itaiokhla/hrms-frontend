@@ -10,9 +10,22 @@ import axios, { AxiosError, type AxiosRequestConfig, type InternalAxiosRequestCo
  * - Tokens are never readable or stored by JavaScript.
  */
 
+/** One validation finding of a structured error body (server `AppError.extra["issues"]`). */
+export interface ApiIssue {
+  code: string;
+  message?: string;
+  field?: string;
+  severity?: string;
+  [key: string]: unknown;
+}
+
 export interface ApiErrorBody {
   detail?: string | { field: string; msg: string }[];
   code?: string;
+  // Structured extras beside detail and code (LH-M0 WI-0.4; server EXTRA_KEYS).
+  issues?: ApiIssue[];
+  details?: Record<string, unknown>;
+  allowed_actions?: string[];
 }
 
 export class ApiError extends Error {

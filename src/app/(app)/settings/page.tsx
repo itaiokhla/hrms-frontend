@@ -129,13 +129,13 @@ function Policies() {
     <div className="grid gap-6 xl:grid-cols-2">
       <Card>
         <CardHeader title={<span className="flex items-center gap-2"><Clock3 className="h-4 w-4" /> Attendance</span>}
-          action={<Button size="sm" loading={saving} onClick={() => save({ graceTime: Number(data.graceTime), requireFaceForSelfCheckIn: data.requireFaceForSelfCheckIn, autoAttendance: data.autoAttendance })}>Save</Button>} />
+          action={<Button size="sm" loading={saving} onClick={() => save({ graceTime: Number(data.graceTime), requireFaceForSelfCheckIn: data.requireFaceForSelfCheckIn })}>Save</Button>} />
         <div className="space-y-3 p-5">
           <Field label="Late grace period (minutes)" hint="Check-ins after shift start plus this grace are marked late.">
             <Input type="number" min={0} max={240} value={Number(data.graceTime)} onChange={(e) => setData({ ...data, graceTime: Number(e.target.value) })} />
           </Field>
           {toggle("requireFaceForSelfCheckIn", "Require face verification", "Self check-in must match the employee's enrolled face.", true)}
-          {toggle("autoAttendance", "Kiosk auto-scan", "The face kiosk scans continuously while active.")}
+          {/* autoAttendance, checkIn, checkOut and voiceWelcome are stored but read by nothing, so they are not shown (BUG-AS-13). */}
         </div>
       </Card>
       <Card>
@@ -179,7 +179,7 @@ function Structure() {
     if (!shift) return;
     try {
       const body = { name: shift.name, start_time: shift.start_time, end_time: shift.end_time, duration_hours: shift.duration_hours || null,
-        is_flexible: !!shift.is_flexible, is_active: shift.is_active ?? true };
+        unpaid_break_minutes: shift.unpaid_break_minutes ?? null, is_flexible: !!shift.is_flexible, is_active: shift.is_active ?? true };
       if (shift.id) await api.put(`/shifts/${shift.id}`, body);
       else await api.post("/shifts", body);
       toast.success("Shift saved");
@@ -211,6 +211,7 @@ function Structure() {
           columns={[
             { key: "n", header: "Shift", cell: (s) => <span className="font-medium">{s.name}</span> },
             { key: "t", header: "Hours", cell: (s) => `${s.start_time} – ${s.end_time}` },
+            { key: "b", header: "Unpaid break", cell: (s) => (s.unpaid_break_minutes ? `${s.unpaid_break_minutes} min` : "—") },
             { key: "f", header: "Flexible", cell: (s) => (s.is_flexible ? "Yes" : "No") },
           ]} />
       </Card>
@@ -241,6 +242,10 @@ function Structure() {
               <Field label="Starts"><Input type="time" value={shift.start_time ?? ""} onChange={(e) => setShift({ ...shift, start_time: e.target.value })} /></Field>
               <Field label="Ends"><Input type="time" value={shift.end_time ?? ""} onChange={(e) => setShift({ ...shift, end_time: e.target.value })} /></Field>
             </div>
+            <Field label="Unpaid break (minutes)" hint="Not paid and not counted as worked time, e.g. a 60-minute lunch.">
+              <Input type="number" min={0} max={1440} inputMode="numeric" value={shift.unpaid_break_minutes ?? ""}
+                onChange={(e) => setShift({ ...shift, unpaid_break_minutes: e.target.value === "" ? null : Number(e.target.value) })} />
+            </Field>
             <label className="flex items-center justify-between rounded-xl border border-border px-4 py-3 text-sm">Flexible hours (never marked late)
               <Switch checked={!!shift.is_flexible} onChange={(v) => setShift({ ...shift, is_flexible: v })} label="Flexible" /></label>
           </div>

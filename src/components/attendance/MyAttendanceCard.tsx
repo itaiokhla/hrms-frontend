@@ -33,6 +33,7 @@ import {
   type ActionMeta,
   faceRequiredFor,
   liveHours,
+  openBreakIsPaid,
   locationModeFor,
   newKey,
   noticeRequired,
@@ -150,7 +151,8 @@ export function MyAttendanceCard({ data, onChange, onReload }: {
   }
   const record = data.record;
   const state = data.attendance_state;
-  const hours = record ? liveHours(record.hours, state, data.policy.lunch_is_paid, (now - received.current.at) / 1000) : null;
+  const lunchIsPaid = record ? openBreakIsPaid(record.breaks, data.policy.lunch_is_paid) : data.policy.lunch_is_paid;
+  const hours = record ? liveHours(record.hours, state, lunchIsPaid, (now - received.current.at) / 1000) : null;
   const openBreak = record?.breaks.find((b) => !b.ended_at);
 
   return (
@@ -239,11 +241,15 @@ function Counter({ label, value, highlight, testId }: { label: string; value: st
 }
 
 /* =========================================================== Location panel */
-const STOP_REASONS: Record<string, string> = {
+// Every reason the server records in attendance.tracking_stop_reason (BUG-AS-16: none is shown unlabelled).
+export const STOP_REASONS: Record<string, string> = {
   PUNCHED_OUT: "stopped at punch-out",
   POLICY_DISABLED: "turned off by your company",
   SHIFT_EXPIRED: "stopped: the shift exceeded the company's limit",
   ACCOUNT_SUSPENDED: "stopped: account suspended",
+  ACCOUNT_DEACTIVATED: "stopped: account deactivated",
+  ACCOUNT_INACTIVE: "stopped: account not active",
+  SUBSCRIPTION_INACTIVE: "stopped: the company's subscription is not active",
   PERMISSION_REVOKED: "stopped: attendance access removed",
   EMPLOYMENT_ENDED: "stopped: employment ended",
   CORRECTED: "stopped by an HR correction",

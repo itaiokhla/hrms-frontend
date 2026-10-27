@@ -1,7 +1,7 @@
 "use client";
 
 import { Download, FileSpreadsheet, FileText } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import toast from "react-hot-toast";
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
@@ -128,7 +128,8 @@ function AttendanceReport() {
 
 function LeaveReport() {
   const { me } = useCan();
-  const [year, setYear] = useState(new Date().getFullYear());
+  const yearInput = useYearInput();
+  const { year, valid: yearValid } = yearInput;
   const { data, loading } = useApi(
     () => api.get<Report<LeaveRow, Record<string, { applied: number; approved: number; rejected: number }>>>("/reports/leaves", { params: { year } }),
     [year],
@@ -137,9 +138,9 @@ function LeaveReport() {
   return (
     <div className="space-y-5">
       <Card className="flex flex-wrap items-end gap-3 p-4">
-        <Field label="Year" className="w-28"><Input type="number" value={year} onChange={(e) => setYear(Number(e.target.value))} /></Field>
+        <YearField input={yearInput} />
         <div className="flex-1" />
-        {can(me, P.REPORT_EXPORT) && <ExportButtons base="/reports/leaves" params={{ year }} />}
+        {can(me, P.REPORT_EXPORT) && yearValid && <ExportButtons base="/reports/leaves" params={{ year }} />}
       </Card>
       {chart.length > 0 && (
         <Card>
@@ -177,7 +178,8 @@ function LeaveReport() {
 
 function DepartmentReport() {
   const { me } = useCan();
-  const [year, setYear] = useState(new Date().getFullYear());
+  const yearInput = useYearInput();
+  const { year } = yearInput;
   const [month, setMonth] = useState<number | "">(new Date().getMonth() + 1);
   const { data, loading } = useApi(
     () => api.get<{ period: string; analytics: DeptRow[]; payroll_visible: boolean }>("/reports/department-analytics", { params: { year, month: month || undefined } }),
@@ -186,7 +188,7 @@ function DepartmentReport() {
   return (
     <div className="space-y-5">
       <Card className="flex flex-wrap items-end gap-3 p-4">
-        <Field label="Year" className="w-28"><Input type="number" value={year} onChange={(e) => setYear(Number(e.target.value))} /></Field>
+        <YearField input={yearInput} />
         <Field label="Month" className="w-40">
           <Select value={month} onChange={(e) => setMonth(e.target.value ? Number(e.target.value) : "")}>
             <option value="">Whole year</option>
@@ -214,7 +216,8 @@ function DepartmentReport() {
 
 function PayrollReport() {
   const { me } = useCan();
-  const [year, setYear] = useState(new Date().getFullYear());
+  const yearInput = useYearInput();
+  const { year } = yearInput;
   const [month, setMonth] = useState<number | "">("");
   const currency = me?.company.currency ?? "INR";
   const { data, loading } = useApi(
@@ -224,7 +227,7 @@ function PayrollReport() {
   return (
     <div className="space-y-5">
       <Card className="flex flex-wrap items-end gap-3 p-4">
-        <Field label="Year" className="w-28"><Input type="number" value={year} onChange={(e) => setYear(Number(e.target.value))} /></Field>
+        <YearField input={yearInput} />
         <Field label="Month" className="w-40">
           <Select value={month} onChange={(e) => setMonth(e.target.value ? Number(e.target.value) : "")}>
             <option value="">Whole year</option>
@@ -232,7 +235,7 @@ function PayrollReport() {
           </Select>
         </Field>
         <div className="flex-1" />
-        {can(me, P.PAYROLL_EXPORT) && can(me, P.REPORT_EXPORT) && <ExportButtons base="/reports/payroll" params={{ year, month: month || undefined }} />}
+        {can(me, P.PAYROLL_EXPORT) && can(me, P.REPORT_EXPORT) && yearInput.valid && <ExportButtons base="/reports/payroll" params={{ year, month: month || undefined }} />}
       </Card>
       {data && (data.currencies?.length ?? 0) > 1 ? (
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -260,5 +263,29 @@ function PayrollReport() {
           ]} />
       </Card>
     </div>
+  );
+}
+
+/**
+ * A report year typed as text: only a valid year (2000-2100, the API's range) is ever requested, and an empty or
+ * invalid field says so instead of loading year 0 (BUG-AS-56).
+ */
+function useYearInput() {
+  const [text, setText] = useState(String(new Date().getFullYear()));
+  const [year, setYear] = useState(new Date().getFullYear());
+  const parsed = /^\d{4}$/.test(text.trim()) ? Number(text.trim()) : NaN;
+  const valid = parsed >= 2000 && parsed <= 2100;
+  useEffect(() => {
+    if (valid) setYear(parsed);
+  }, [valid, parsed]);
+  return { text, setText, year, valid };
+}
+
+function YearField({ input }: { input: ReturnType<typeof useYearInput> }) {
+  return (
+    <Field label="Year" className="w-40" error={input.valid ? undefined : "Enter a year between 2000 and 2100."}>
+      <Input type="number" inputMode="numeric" min={2000} max={2100} value={input.text} aria-invalid={!input.valid}
+        onChange={(e) => input.setText(e.target.value)} />
+    </Field>
   );
 }

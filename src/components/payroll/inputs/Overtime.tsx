@@ -12,13 +12,20 @@ import { useModalRoute } from "@/components/payroll/useModalRoute";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Select, Switch, Textarea } from "@/components/ui/field";
 import { Column, DataTable, EmptyState, ErrorState, Pagination, TabPanel, Tabs } from "@/components/ui/layout";
-import { Modal } from "@/components/ui/overlay";
+import { Modal, Sheet } from "@/components/ui/overlay";
 import { Card, CardHeader } from "@/components/ui/primitives";
 import { can, canBeyondSelf } from "@/lib/access";
 import { ApiError } from "@/lib/api";
 import { fmtDate, fmtTime } from "@/lib/format";
 import { useApi } from "@/lib/hooks";
 import { P } from "@/lib/permissions.generated";
+
+import { nextDayIso, zonedIso } from "@/lib/timezone";
+import { ColumnChooser } from "@/components/shared/ColumnChooser";
+import { FilterBar as SharedFilterBar } from "@/components/shared/FilterBar";
+import { SavedViews, ViewActions } from "@/components/shared/SavedViews";
+import { savedViewsApi } from "@/lib/savedViews";
+import { PAGE_SIZES, useListQuery } from "@/lib/useListQuery";
 
 import { overtimeApi, type OvertimeBody } from "./api";
 import { ConflictBanner, DecisionModal, DetailGate, EmployeeField, ErrorSummary, FilterBar, Hours, LocalStatusChip, ReasonModal, WorkspaceHeader, fieldErrors } from "./shared";
@@ -87,8 +94,10 @@ export function OvertimeRequestModal({ open, onOpenChange, onCreated, onDirtyCha
     const body: OvertimeBody = { date, minutes: minutes!, reason: reason.trim(), comp_off: compOff };
     if (someoneElse && employeeId) body.employee_id = employeeId;
     if (start && end) {
-      body.start_at = `${date}T${start}:00`;
-      body.end_at = `${end < start ? nextDay(date) : date}T${end}:00`;
+      // Company-local wall times with their offset (BUG-AS-21); an end before the start is the next day.
+      const zone = me?.company?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
+      body.start_at = zonedIso(date, start, zone);
+      body.end_at = zonedIso(end < start ? nextDay(date) : date, end, zone);
     }
     setBusy(true);
     setError(null);
@@ -166,10 +175,7 @@ export function OvertimeRequestModal({ open, onOpenChange, onCreated, onDirtyCha
 }
 
 function nextDay(date: string): string {
-  const d = new Date(`${date}T00:00:00`);
-  d.setDate(d.getDate() + 1);
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  return nextDayIso(date);
 }
 
 /* ------------------------------------------------------------------ approve with edited minutes */
@@ -393,7 +399,7 @@ export function OvertimeWorkspace() {
         )}
         {seeAll && (
           <TabPanel value="all">
-            <EntryTable params={{}} mode="all" refresh={refresh} />
+            <OvertimeAllEntries refresh={refresh} />
           </TabPanel>
         )}
       </Tabs>
@@ -402,8 +408,110 @@ export function OvertimeWorkspace() {
   );
 }
 
-/** `/overtime/[id]`: one entry with its approval state. */
-export function OvertimeDetail({ id }: { id: string }) {
+/* ------------------------------------------------- X-M3 pilot list (OD-AS-03) */
+
+const ALL_FILTERS = ["status", "start", "end", "employee_id"] as const;
+const ALL_SORTS = ["date", "employee", "minutes", "status"] as const;
+const OPTIONAL_COLUMNS = [
+  { key: "minutes", label: "Requested" },
+  { key: "approved", label: "Approved" },
+  { key: "source", label: "Source" },
+  { key: "status", label: "Status" },
+];
+
+/**
+ * "All entries" on the list standard (X 04 §2; list key `overtime.entries`): URL-bound query, saved views, search,
+ * server sort, 25 / 50 pages, column chooser, and the existing payroll detail in a right-side Sheet
+ * (`?modal=overtime-entry&id=`). The request form and the other tabs are unchanged (D-X-13).
+ */
+function OvertimeAllEntries({ refresh }: { refresh: number }) {
+  const list = useListQuery({ filters: ALL_FILTERS, sortKeys: ALL_SORTS });
+  const sheet = useModalRoute("overtime-entry", { keys: ["id"] });
+  const views = useApi(() => savedViewsApi.list("overtime.entries"), []);
+  const [columns, setColumns] = useState<string[]>(OPTIONAL_COLUMNS.map((c) => c.key));
+  const { data, error, loading, reload } = useApi(
+    () => overtimeApi.list(list.params),
+    [JSON.stringify(list.params), refresh],
+  );
+  const active = list.view;
+  const stored = [...(views.data?.system_views ?? []), ...(views.data?.views ?? [])].find((v) => String(v.id) === active)?.query;
+  const currentQuery: Record<string, unknown> = {
+    ...list.filters, ...(list.q ? { q: list.q } : {}), ...(list.sort ? { sort: list.sort } : {}),
+    ...(list.limit !== 25 ? { limit: list.limit } : {}), columns,
+  };
+  const modified = !!active && !!stored && JSON.stringify({ ...stored, columns: undefined }) !==
+    JSON.stringify({ ...currentQuery, columns: undefined });
+  const chips = Object.entries(list.filters).map(([key, value]) => ({
+    key,
+    label: key === "status" ? "Status" : key === "start" ? "From" : key === "end" ? "To" : "Employee",
+    values: (Array.isArray(value) ? value : [value]).map((v) => (key === "status" ? human(v) : v)),
+  }));
+  const table: Column<OvertimeEntry>[] = [
+    { key: "employee", header: "Employee", primary: true, hideable: false, sortKey: "employee",
+      cell: (r) => r.employee_name ?? `Employee #${r.employee_id}` },
+    { key: "date", header: "Date", hideable: false, sortKey: "date", cell: (r) => fmtDate(r.date) },
+    { key: "minutes", header: "Requested", sortKey: "minutes", cell: (r) => <Hours minutes={r.minutes_requested ?? r.minutes_computed} /> },
+    { key: "approved", header: "Approved", hideOnMobile: true, cell: (r) => <Hours minutes={r.minutes_approved} /> },
+    { key: "source", header: "Source", hideOnMobile: true, cell: (r) => SOURCE[r.source] ?? r.source },
+    { key: "status", header: "Status", sortKey: "status", cell: (r) => <LocalStatusChip vocabulary="overtime" code={r.status} /> },
+  ];
+  return (
+    <Card>
+      <SharedFilterBar
+        views={<SavedViews data={views.data} active={active} modified={modified}
+          onSelect={(id, query) => {
+            list.selectView(id, query);
+            if (query && Array.isArray(query.columns)) setColumns(query.columns as string[]);
+          }} />}
+        search={{ value: list.qInput, onChange: list.setQ, label: "Search name or code" }}
+        tools={<ColumnChooser columns={OPTIONAL_COLUMNS} visible={columns} onChange={setColumns}
+          defaults={OPTIONAL_COLUMNS.map((c) => c.key)} />}
+        chips={chips}
+        onRemoveChip={(key) => list.setFilter(key, null)}
+        onClearAll={list.clearFilters}
+        resultCount={data?.total}
+        chipsEnd={<ViewActions listKey="overtime.entries" data={views.data} active={active} query={currentQuery}
+          onReset={() => list.selectView(active ?? null, stored)}
+          onSaved={(view) => { void views.reload(); list.selectView(String(view.id), view.query); }} />}
+      >
+        <Field label="Status" className="w-48">
+          <Select value={(list.filters.status as string) ?? ""} onChange={(e) => list.setFilter("status", e.target.value || null)}>
+            <option value="">All statuses</option>
+            {OVERTIME_STATUSES.map((s) => <option key={s} value={s}>{human(s)}</option>)}
+          </Select>
+        </Field>
+      </SharedFilterBar>
+      {error ? (
+        <ErrorState message={error.message} onRetry={reload} />
+      ) : (
+        <DataTable
+          columns={table}
+          visibleColumns={columns}
+          rows={data?.items}
+          loading={loading && !data}
+          busy={loading && !!data}
+          rowKey={(r) => r.id}
+          sort={list.sort}
+          onSortChange={list.setSort}
+          rowHref={(r) => `/overtime?tab=all&modal=overtime-entry&id=${r.id}`}
+          onRowClick={(r) => sheet.openModal({ id: r.id })}
+          cardBelowMd
+          caption="Overtime entries"
+          empty={<EmptyState title="No overtime entries" description="Try another view or clear the filters." />}
+        />
+      )}
+      {data && <Pagination total={data.total} skip={list.skip} limit={list.limit} onChange={list.setSkip}
+        pageSizes={[...PAGE_SIZES]} onLimitChange={list.setLimit} />}
+      <Sheet open={sheet.open} onOpenChange={sheet.onOpenChange} width="max-w-2xl"
+        title={sheet.id ? `Overtime entry #${sheet.id}` : "Overtime entry"}>
+        {sheet.id && <OvertimeDetail id={sheet.id} embedded onChanged={() => void reload()} />}
+      </Sheet>
+    </Card>
+  );
+}
+
+/** `/overtime/[id]`: one entry with its approval state (also the body of the list's Sheet when `embedded`). */
+export function OvertimeDetail({ id, embedded = false, onChanged }: { id: string; embedded?: boolean; onChanged?: () => void }) {
   const { me } = useCan();
   const { data, error, loading, reload } = useApi(() => overtimeApi.get(id), [id]);
   const [decision, setDecision] = useState<"approve" | "reject" | null>(null);
@@ -419,9 +527,11 @@ export function OvertimeDetail({ id }: { id: string }) {
     <DetailGate loading={loading} error={error} hasData={!!data} onRetry={reload} what="Overtime entry" backHref="/overtime" backLabel="Back to Overtime">
       {data && (
         <div className="space-y-6">
-          <Link href="/overtime" className="inline-flex min-h-[44px] items-center gap-1 text-sm font-medium text-muted-foreground hover:text-foreground">
-            <ArrowLeft className="h-4 w-4 rtl:-scale-x-100" aria-hidden /> Overtime
-          </Link>
+          {!embedded && (
+            <Link href="/overtime" className="inline-flex min-h-[44px] items-center gap-1 text-sm font-medium text-muted-foreground hover:text-foreground">
+              <ArrowLeft className="h-4 w-4 rtl:-scale-x-100" aria-hidden /> Overtime
+            </Link>
+          )}
           <WorkspaceHeader
             eyebrow="Time"
             showHideAmounts={false}
@@ -490,7 +600,8 @@ export function OvertimeDetail({ id }: { id: string }) {
               </div>
             </Card>
           </div>
-          {decision && <ApproveOvertime entry={data} decision={decision} onClose={() => setDecision(null)} onDone={() => void reload()} />}
+          {decision && <ApproveOvertime entry={data} decision={decision} onClose={() => setDecision(null)}
+            onDone={() => { void reload(); onChanged?.(); }} />}
         </div>
       )}
     </DetailGate>

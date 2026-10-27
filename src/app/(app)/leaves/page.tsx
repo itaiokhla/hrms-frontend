@@ -9,7 +9,7 @@ import toast from "react-hot-toast";
 import { RequireAccess, useCan } from "@/components/access/Can";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Select, Switch, Textarea } from "@/components/ui/field";
-import { DataTable, EmptyState, PageHeader, TabPanel, Tabs } from "@/components/ui/layout";
+import { DataTable, EmptyState, ErrorState, PageHeader, Pagination, TabPanel, Tabs } from "@/components/ui/layout";
 import { Modal, useConfirm } from "@/components/ui/overlay";
 import { Avatar, Badge, Card, CardHeader, Skeleton, StatusBadge } from "@/components/ui/primitives";
 import { api, errorMessage } from "@/lib/api";
@@ -19,6 +19,8 @@ import { fmtDate, fromNow, titleCase, todayISO } from "@/lib/format";
 import { useApi } from "@/lib/hooks";
 import { P } from "@/lib/permissions.generated";
 import type { ChainStep, LeaveBalance, LeaveRequest, LeaveType, Page, Role } from "@/lib/types";
+
+const TEAM_PAGE = 50;
 
 export default function LeavesPage() {
   return (
@@ -33,7 +35,7 @@ export default function LeavesPage() {
 function Leaves() {
   const params = useSearchParams();
   const { me } = useCan();
-  const { data: inbox, reload: reloadInbox } = useApi(() => api.get<LeaveRequest[]>("/leaves/approvals"), []);
+  const { data: inbox, error: inboxError, reload: reloadInbox } = useApi(() => api.get<LeaveRequest[]>("/leaves/approvals"), []);
   const mine = can(me, P.LEAVE_APPLY) && !!me?.employee;
   const tabs = [
     ...(mine ? [{ value: "mine", label: "My leave" }] : []),
@@ -41,14 +43,19 @@ function Leaves() {
     ...(canBeyondSelf(me, P.LEAVE_READ) ? [{ value: "team", label: "Requests" }] : []),
     ...(can(me, P.LEAVE_MANAGE_POLICY) ? [{ value: "policy", label: "Policy" }] : []),
   ];
-  const [tab, setTab] = useState(params.get("tab") ?? tabs[0].value);
+  // Only a tab this person can see is honoured from ?tab= (LH BUG-24); anything else opens the first tab.
+  const wanted = params.get("tab");
+  const [tab, setTab] = useState(wanted && tabs.some((t) => t.value === wanted) ? wanted : tabs[0].value);
 
   return (
     <div>
       <PageHeader title="Leave" description="Requests follow your company's approval chain. Changes in reporting lines re-route pending approvals automatically." />
       <Tabs tabs={tabs} value={tab} onValueChange={setTab}>
         {mine && <TabPanel value="mine"><MyLeave /></TabPanel>}
-        <TabPanel value="approvals"><Approvals items={inbox} reload={reloadInbox} /></TabPanel>
+        <TabPanel value="approvals">
+          {inboxError ? <Card><ErrorState message={inboxError.message} onRetry={() => void reloadInbox()} /></Card>
+            : <Approvals items={inbox} reload={reloadInbox} />}
+        </TabPanel>
         {canBeyondSelf(me, P.LEAVE_READ) && <TabPanel value="team"><TeamRequests /></TabPanel>}
         {can(me, P.LEAVE_MANAGE_POLICY) && <TabPanel value="policy"><Policy /></TabPanel>}
       </Tabs>
@@ -60,8 +67,8 @@ function Leaves() {
 function MyLeave() {
   const confirm = useConfirm();
   const [year] = useState(new Date().getFullYear());
-  const { data: balance, reload: reloadBalance } = useApi(() => api.get<Record<string, LeaveBalance>>(`/leaves/my/balance?year=${year}`), [year]);
-  const { data: leaves, reload } = useApi(() => api.get<LeaveRequest[]>("/leaves/my"), []);
+  const { data: balance, error: balanceError, reload: reloadBalance } = useApi(() => api.get<Record<string, LeaveBalance>>(`/leaves/my/balance?year=${year}`), [year]);
+  const { data: leaves, error: leavesError, reload } = useApi(() => api.get<LeaveRequest[]>("/leaves/my"), []);
   const { data: types } = useApi(() => api.get<LeaveType[]>("/leaves/types"), []);
   const [applyOpen, setApplyOpen] = useState(false);
   const [expanded, setExpanded] = useState<number | null>(null);
@@ -84,7 +91,9 @@ function MyLeave() {
         <h2 className="text-lg font-semibold">Balances {year}</h2>
         <Button onClick={() => setApplyOpen(true)}><CalendarPlus className="h-4 w-4" /> Apply for leave</Button>
       </div>
-      {!balance ? (
+      {balanceError ? (
+        <Card><ErrorState message={balanceError.message} onRetry={() => void reloadBalance()} /></Card>
+      ) : !balance ? (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-28 rounded-2xl" />)}</div>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -116,7 +125,8 @@ function MyLeave() {
       )}
       <Card>
         <CardHeader title="My requests" />
-        {!leaves ? <div className="p-4"><Skeleton className="h-24" /></div> : leaves.length === 0 ? (
+        {leavesError ? <ErrorState message={leavesError.message} onRetry={() => void reload()} />
+          : !leaves ? <div className="p-4"><Skeleton className="h-24" /></div> : leaves.length === 0 ? (
           <EmptyState icon={<CalendarRange />} title="No leave requests yet" />
         ) : (
           <ul className="divide-y divide-border/60">
@@ -288,7 +298,8 @@ function Approvals({ items, reload }: { items?: LeaveRequest[]; reload: () => Pr
 function TeamRequests() {
   const [status, setStatus] = useState("");
   const [skip, setSkip] = useState(0);
-  const { data, loading } = useApi(() => api.get<Page<LeaveRequest>>("/leaves", { params: { status: status || undefined, skip, limit: 50 } }), [status, skip]);
+  const { data, loading, error, reload } = useApi(() => api.get<Page<LeaveRequest>>("/leaves", { params: { status: status || undefined, skip, limit: TEAM_PAGE } }), [status, skip]);
+  if (error) return <Card><ErrorState message={error.message} onRetry={() => void reload()} /></Card>;
   return (
     <Card>
       <div className="flex items-center gap-3 border-b border-border p-4">
@@ -311,6 +322,7 @@ function TeamRequests() {
           } },
           { key: "status", header: "Status", cell: (l) => <StatusBadge status={l.status} /> },
         ]} />
+      {data && <Pagination total={data.total} skip={skip} limit={TEAM_PAGE} onChange={setSkip} />}
     </Card>
   );
 }

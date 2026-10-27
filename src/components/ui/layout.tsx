@@ -261,6 +261,25 @@ export interface Column<T> {
   primary?: boolean;
   /** Card mode: leave this column out of the card. */
   hideInCard?: boolean;
+  /** Server sort key of this column (X 04 §2.6); the header becomes a sort button. */
+  sortKey?: string;
+  /** Column chooser (X 04 §2.9): false = the identifier column, never hidden. */
+  hideable?: boolean;
+}
+
+/** Row selection for bulk actions (X 04 §2.10): page-level header checkbox, labelled row checkboxes. */
+export interface TableSelection<T> {
+  isSelected: (row: T) => boolean;
+  onToggle: (row: T, checked: boolean) => void;
+  onTogglePage: (rows: T[], checked: boolean) => void;
+  /** Accessible name of a row's checkbox, e.g. "Select Ravi Kumar, Mon 2 Nov 2026". */
+  label: (row: T) => string;
+}
+
+function nextSort(current: string | undefined, key: string): string | undefined {
+  if (current === key) return `-${key}`;
+  if (current === `-${key}`) return undefined; // third click: back to the list default
+  return key;
 }
 
 export function DataTable<T>({
@@ -273,6 +292,12 @@ export function DataTable<T>({
   cardBelowMd,
   stickyHeader,
   caption,
+  sort,
+  onSortChange,
+  selection,
+  rowHref,
+  busy,
+  visibleColumns,
 }: {
   columns: Column<T>[];
   rows: T[] | undefined;
@@ -286,7 +311,79 @@ export function DataTable<T>({
   stickyHeader?: boolean;
   /** Accessible table name (visually hidden). */
   caption?: string;
+  /** Server sort: "field" or "-field"; undefined = the list default. */
+  sort?: string;
+  onSortChange?: (sort: string | undefined) => void;
+  selection?: TableSelection<T>;
+  /** The row's overlay URL: the first cell becomes a real link (Ctrl/⌘-click opens it in a new tab). */
+  rowHref?: (row: T) => string;
+  /** Refetching: rows dim instead of turning into skeletons (X 04 §2.4 layout stability). */
+  busy?: boolean;
+  /** Keys of the columns to show, in order (column chooser); undefined = all. */
+  visibleColumns?: string[];
 }) {
+  if (visibleColumns) {
+    const byKey = new Map(columns.map((c) => [c.key, c]));
+    const pinned = columns.filter((c) => c.hideable === false && !visibleColumns.includes(c.key));
+    columns = [...pinned, ...visibleColumns.map((k) => byKey.get(k)).filter((c): c is Column<T> => !!c)];
+  }
+  if (selection && rows) {
+    const pageRows = rows;
+    const all = pageRows.length > 0 && pageRows.every((r) => selection.isSelected(r));
+    const some = !all && pageRows.some((r) => selection.isSelected(r));
+    columns = [
+      {
+        key: "__select",
+        className: "w-10",
+        hideInCard: true,
+        header: (
+          <input
+            type="checkbox"
+            aria-label="Select all rows on this page"
+            checked={all}
+            ref={(el) => {
+              if (el) el.indeterminate = some;
+            }}
+            onChange={(e) => selection.onTogglePage(pageRows, e.target.checked)}
+            className="h-4 w-4 accent-primary"
+          />
+        ),
+        cell: (row: T) => (
+          <input
+            type="checkbox"
+            aria-label={selection.label(row)}
+            checked={selection.isSelected(row)}
+            onClick={(e) => e.stopPropagation()}
+            onChange={(e) => selection.onToggle(row, e.target.checked)}
+            className="h-4 w-4 accent-primary"
+          />
+        ),
+      },
+      ...columns,
+    ];
+  }
+  if (rowHref) {
+    const [first, ...rest] = columns.filter((c) => c.key !== "__select");
+    const linked: Column<T> = {
+      ...first,
+      cell: (row: T) => (
+        <a
+          href={rowHref(row)}
+          className="font-medium text-foreground hover:underline focus-visible:underline"
+          onClick={(e) => {
+            // The row's own click handler must not also run: a modified click opens a new tab only.
+            e.stopPropagation();
+            if (e.ctrlKey || e.metaKey || e.shiftKey || e.button === 1 || !onRowClick) return; // new tab / window
+            e.preventDefault();
+            onRowClick(row);
+          }}
+        >
+          {first.cell(row)}
+        </a>
+      ),
+    };
+    columns = [...columns.filter((c) => c.key === "__select"), linked, ...rest];
+  }
   if (loading && !rows?.length) {
     return (
       <div className="space-y-2 p-4">
@@ -315,15 +412,26 @@ export function DataTable<T>({
         cardBelowMd && "hidden md:block",
       )}
     >
-      <table className="w-full text-sm">
+      <table className={cn("w-full text-sm transition-opacity", busy && "opacity-60")} aria-busy={busy || undefined}>
         {caption && <caption className="sr-only">{caption}</caption>}
         <thead className={cn(stickyHeader && "sticky top-0 z-10 bg-surface/95 backdrop-blur")}>
           <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
-            {columns.map((c) => (
-              <th key={c.key} scope="col" className={cn("whitespace-nowrap px-4 py-3 font-medium", c.hideOnMobile && "hidden md:table-cell", c.className)}>
-                {c.header}
-              </th>
-            ))}
+            {columns.map((c) => {
+              const sortable = !!(c.sortKey && onSortChange);
+              const direction = sortable && sort === c.sortKey ? "ascending" : sortable && sort === `-${c.sortKey}` ? "descending" : undefined;
+              return (
+                <th key={c.key} scope="col" aria-sort={direction}
+                  className={cn("whitespace-nowrap px-4 py-3 font-medium", c.hideOnMobile && "hidden md:table-cell", c.className)}>
+                  {sortable ? (
+                    <button type="button" onClick={() => onSortChange!(nextSort(sort, c.sortKey!))}
+                      className="inline-flex items-center gap-1 uppercase tracking-wide hover:text-foreground focus-visible:text-foreground">
+                      {c.header}
+                      {direction && <span aria-hidden>{direction === "ascending" ? "▲" : "▼"}</span>}
+                    </button>
+                  ) : c.header}
+                </th>
+              );
+            })}
           </tr>
         </thead>
         <tbody>
@@ -397,21 +505,42 @@ export function Pagination({
   skip,
   limit,
   onChange,
+  pageSizes,
+  onLimitChange,
 }: {
   total: number;
   skip: number;
   limit: number;
   onChange: (skip: number) => void;
+  /** Offer these page sizes (e.g. [25, 50]); the bar then always shows, with the total. */
+  pageSizes?: number[];
+  onLimitChange?: (limit: number) => void;
 }) {
-  if (total <= limit) return null;
+  const sizes = pageSizes && onLimitChange ? pageSizes : null;
+  if (total <= limit && !sizes) return null;
   const page = Math.floor(skip / limit) + 1;
-  const pages = Math.ceil(total / limit);
+  const pages = Math.max(1, Math.ceil(total / limit));
   return (
-    <div className="flex items-center justify-between gap-4 border-t border-border px-4 py-3 text-sm text-muted-foreground">
-      <span>
-        {skip + 1}–{Math.min(skip + limit, total)} of {total}
+    <div className="flex flex-wrap items-center justify-between gap-4 border-t border-border px-4 py-3 text-sm text-muted-foreground">
+      <span data-testid="pagination-range">
+        {total === 0 ? "0 of 0" : `${skip + 1}–${Math.min(skip + limit, total)} of ${total}`}
       </span>
       <div className="flex items-center gap-1">
+        {sizes && (
+          <label className="mr-2 flex items-center gap-1.5">
+            <span>Rows</span>
+            <select
+              aria-label="Rows per page"
+              className="rounded-lg border border-border bg-surface px-2 py-1 text-sm text-foreground"
+              value={limit}
+              onChange={(e) => onLimitChange?.(Number(e.target.value))}
+            >
+              {sizes.map((n) => (
+                <option key={n} value={n}>{n}</option>
+              ))}
+            </select>
+          </label>
+        )}
         <Button variant="ghost" size="icon" aria-label="Previous page" disabled={page <= 1} onClick={() => onChange(skip - limit)}>
           <ChevronLeft className="h-4 w-4" />
         </Button>

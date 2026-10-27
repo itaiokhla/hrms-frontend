@@ -285,7 +285,17 @@ export const NAV: NavGroup[] = [
         icon: CalendarRange,
         visible: (me) => canAny(me, [P.LEAVE_APPLY, P.LEAVE_READ, P.LEAVE_APPROVE, P.LEAVE_MANAGE_POLICY]),
       },
-      { label: "Holidays", href: "/holidays", icon: CalendarDays, visible: (me) => can(me, P.HOLIDAY_READ) },
+      {
+        label: "Holidays",
+        href: "/holidays",
+        icon: CalendarDays,
+        visible: (me) => can(me, P.HOLIDAY_READ),
+        // LH-M1 children (LH 09-ui-ux/01 §3.1); calendars, next year and settings join with the calendar goal.
+        children: [
+          { label: "Calendar", href: "/holidays", icon: CalendarDays, visible: (me) => can(me, P.HOLIDAY_READ) },
+          { label: "Work weeks", href: "/holidays/work-weeks", icon: CalendarCheck2, visible: (me) => can(me, P.HOLIDAY_MANAGE) },
+        ],
+      },
       {
         // Today's payslip page stays the entry; the v2 self-service pages expand below it.
         label: "Payslips",

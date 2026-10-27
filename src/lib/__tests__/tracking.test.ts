@@ -1,4 +1,4 @@
-import { liveHours } from "../attendance";
+import { liveHours, openBreakIsPaid } from "../attendance";
 import type { LocationAttempt } from "../geolocation";
 import { TrackingController, type TrackerDeps } from "../tracking/controller";
 import { decide, MAX_WAIT_MS, RETRY_AFTER_FAILURE_MS } from "../tracking/schedule";
@@ -77,6 +77,14 @@ describe("liveHours", () => {
     expect(liveHours(base, "ON_LUNCH", false, 60)).toMatchObject({ gross: 3660, lunch: 660, net: 3000 });
     expect(liveHours(base, "ON_LUNCH", true, 60)).toMatchObject({ net: 3060 });
     expect(liveHours({ ...base, provisional: false }, "PUNCHED_OUT", false, 500)).toMatchObject({ gross: 3600, net: 3000 });
+  });
+
+  it("BUG-AS-17: the lunch in progress keeps its own paid snapshot, not today's policy", () => {
+    const open = [{ ended_at: null, is_paid: false }];
+    expect(openBreakIsPaid(open, true)).toBe(false);
+    expect(openBreakIsPaid([{ ended_at: "2026-10-19T08:00:00Z", is_paid: true }], false)).toBe(false);
+    expect(openBreakIsPaid(undefined, true)).toBe(true);
+    expect(liveHours(base, "ON_LUNCH", openBreakIsPaid(open, true), 60)).toMatchObject({ net: 3000 });
   });
 });
 

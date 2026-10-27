@@ -84,25 +84,33 @@ export function Sheet({
   children,
   footer,
   width = "max-w-xl",
-}: Omit<ModalProps, "size"> & { width?: string }) {
+  modal = true,
+}: Omit<ModalProps, "size"> & {
+  width?: string;
+  /** false: non-modal side panel (X 04 §3.6, list hosts ≥ lg): no scrim, focus not trapped, aria-modal="false". */
+  modal?: boolean;
+}) {
   // Slides in from the inline end: the right in LTR, the left in RTL.
   const rtl = typeof document !== "undefined" && document.documentElement.dir === "rtl";
   const offscreen = rtl ? "-100%" : "100%";
   return (
     <MotionConfig reducedMotion="user">
-    <Dialog.Root open={open} onOpenChange={onOpenChange}>
+    <Dialog.Root open={open} onOpenChange={onOpenChange} modal={modal}>
       <AnimatePresence>
         {open && (
           <Dialog.Portal forceMount>
-            <Dialog.Overlay asChild forceMount>
-              <motion.div
-                className="fixed inset-0 z-50 bg-black/30 backdrop-blur-[2px]"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-              />
-            </Dialog.Overlay>
-            <Dialog.Content asChild forceMount>
+            {modal && (
+              <Dialog.Overlay asChild forceMount>
+                <motion.div
+                  className="fixed inset-0 z-50 bg-black/30 backdrop-blur-[2px]"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                />
+              </Dialog.Overlay>
+            )}
+            <Dialog.Content asChild forceMount
+              onInteractOutside={modal ? undefined : (e) => e.preventDefault()}>
               <motion.aside
                 className={cn("fixed inset-y-0 end-0 z-50 flex w-full flex-col border-s border-border bg-surface shadow-lift", width)}
                 initial={{ x: offscreen }}
@@ -142,6 +150,8 @@ interface ConfirmOptions {
   title: string;
   message: ReactNode;
   confirmLabel?: string;
+  /** The dismiss button names what is kept (e.g. "Keep editing"); default "Cancel". */
+  cancelLabel?: string;
   tone?: "danger" | "primary";
 }
 
@@ -168,7 +178,7 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
         footer={
           <>
             <Button variant="secondary" onClick={() => close(false)}>
-              Cancel
+              {state?.cancelLabel ?? "Cancel"}
             </Button>
             <Button variant={state?.tone === "danger" ? "danger" : "primary"} onClick={() => close(true)}>
               {state?.confirmLabel ?? "Confirm"}

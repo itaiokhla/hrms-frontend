@@ -11,7 +11,7 @@ import { SessionDrawer } from "@/components/attendance/SessionDrawer";
 import { EmployeePicker, type PickedEmployee } from "@/components/shared/EmployeePicker";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Select, Textarea } from "@/components/ui/field";
-import { DataTable, EmptyState, PageHeader, StatCard, TabPanel, Tabs } from "@/components/ui/layout";
+import { DataTable, EmptyState, ErrorState, PageHeader, Pagination, StatCard, TabPanel, Tabs } from "@/components/ui/layout";
 import { Modal } from "@/components/ui/overlay";
 import { Avatar, Badge, Card, CardHeader, Skeleton, StatusBadge } from "@/components/ui/primitives";
 import { api, errorMessage } from "@/lib/api";
@@ -20,6 +20,8 @@ import { fmtDate, fmtHours, fmtTime, todayISO } from "@/lib/format";
 import { useApi } from "@/lib/hooks";
 import { P } from "@/lib/permissions.generated";
 import type { AttendanceRecord, MyAttendance, Page, TodaySummary } from "@/lib/types";
+
+const PAGE_SIZES = [25, 50];
 
 export default function AttendancePage() {
   return (
@@ -101,10 +103,18 @@ function TeamAttendance() {
   const { data: summary, reload } = useApi(() => api.get<TodaySummary>("/attendance/summary/today"), []);
   const [start, setStart] = useState(todayISO());
   const [end, setEnd] = useState(todayISO());
-  const { data: records, loading, reload: reloadRecords } = useApi(
-    () => api.get<Page<AttendanceRecord>>("/attendance", { params: { start_date: start, end_date: end, limit: 200 } }),
-    [start, end],
+  // Server-side pages with a total (BUG-AS-11); an inverted range is the server's INVALID_RANGE (BUG-AS-18).
+  const [limit, setLimit] = useState(PAGE_SIZES[0]);
+  const [skip, setSkip] = useState(0);
+  const { data: records, loading, error, reload: reloadRecords } = useApi(
+    () => api.get<Page<AttendanceRecord>>("/attendance", { params: { start_date: start, end_date: end, skip, limit } }),
+    [start, end, skip, limit],
   );
+  const setRange = (from: string, to: string) => {
+    setStart(from);
+    setEnd(to);
+    setSkip(0);
+  };
   const [manualOpen, setManualOpen] = useState(false);
   const [open, setOpen] = useState<number | null>(null);
 
@@ -124,13 +134,17 @@ function TeamAttendance() {
       {can(me, P.LOCATION_REVIEW) && <LocationReviewPanel onOpenSession={setOpen} />}
       <Card>
         <div className="flex flex-col gap-3 border-b border-border p-4 sm:flex-row sm:items-end">
-          <Field label="From" className="sm:w-44"><Input type="date" value={start} max={end} onChange={(e) => setStart(e.target.value)} /></Field>
-          <Field label="To" className="sm:w-44"><Input type="date" value={end} min={start} onChange={(e) => setEnd(e.target.value)} /></Field>
+          <Field label="From" className="sm:w-44"><Input type="date" value={start} onChange={(e) => setRange(e.target.value, end)} /></Field>
+          <Field label="To" className="sm:w-44"><Input type="date" value={end} onChange={(e) => setRange(start, e.target.value)} /></Field>
           <div className="flex-1" />
           {can(me, P.ATTENDANCE_REGULARIZE) && (
             <Button variant="secondary" onClick={() => setManualOpen(true)}><PenLine className="h-4 w-4" /> Record manually</Button>
           )}
         </div>
+        {error ? (
+          <ErrorState message={error.message} onRetry={() => void reloadRecords()} />
+        ) : (
+        <>
         <DataTable
           rows={records?.items}
           loading={loading}
@@ -150,6 +164,12 @@ function TeamAttendance() {
             { key: "status", header: "Status", cell: (r) => <StatusBadge status={r.status} /> },
           ]}
         />
+        {records && (
+          <Pagination total={records.total} skip={skip} limit={limit} onChange={setSkip} pageSizes={PAGE_SIZES}
+            onLimitChange={(n) => { setLimit(n); setSkip(0); }} />
+        )}
+        </>
+        )}
       </Card>
       <ManualEntry open={manualOpen} onOpenChange={setManualOpen} onSaved={() => { void reload(); void reloadRecords(); }} />
       <SessionDrawer attendanceId={open} canLocate={can(me, P.LOCATION_READ)} onClose={() => setOpen(null)} />
@@ -182,16 +202,24 @@ function ManualEntry({ open, onOpenChange, onSaved }: { open: boolean; onOpenCha
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
 
+  const absent = status === "absent";
+  // Wall-clock times in the employee's work time zone (the server converts them, BUG-AS-05); an end at or before
+  // the start is the next day.
+  const overnight = !absent && !!checkOut && checkOut <= checkIn;
+
   const save = async () => {
     if (!employee) return;
     setSaving(true);
     try {
-      const iso = (t: string) => new Date(`${date}T${t}:00`).toISOString();
-      await api.post("/attendance/manual", {
-        employee_id: employee.id, date, check_in_time: iso(checkIn), check_out_time: checkOut ? iso(checkOut) : null, status, notes: notes || null,
-        // Only sent when filled in; otherwise the existing breaks are kept (and checked against the new times).
-        ...(lunchStart && lunchEnd ? { breaks: [{ started_at: iso(lunchStart), ended_at: iso(lunchEnd) }] } : {}),
-      });
+      await api.post("/attendance/manual", absent
+        // An absence carries no times and no hours (BUG-AS-04).
+        ? { employee_id: employee.id, date, status, notes: notes || null }
+        : {
+          employee_id: employee.id, date, status, notes: notes || null,
+          check_in_local: checkIn, check_out_local: checkOut || null,
+          // Only sent when filled in; otherwise the existing breaks are kept (and checked against the new times).
+          ...(lunchStart && lunchEnd ? { lunch_start_local: lunchStart, lunch_end_local: lunchEnd } : {}),
+        });
       toast.success("Attendance recorded");
       onOpenChange(false);
       onSaved();
@@ -212,13 +240,27 @@ function ManualEntry({ open, onOpenChange, onSaved }: { open: boolean; onOpenCha
         </Field>
         <div className="grid gap-4 sm:grid-cols-3">
           <Field label="Date"><Input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></Field>
-          <Field label="Check in"><Input type="time" value={checkIn} onChange={(e) => setCheckIn(e.target.value)} /></Field>
-          <Field label="Check out"><Input type="time" value={checkOut} onChange={(e) => setCheckOut(e.target.value)} /></Field>
+          {!absent && (
+            <>
+              <Field label="Check in"><Input type="time" value={checkIn} onChange={(e) => setCheckIn(e.target.value)} /></Field>
+              <Field label="Check out" hint={overnight ? "Ends the next day (+1 day)" : undefined}>
+                <Input type="time" value={checkOut} onChange={(e) => setCheckOut(e.target.value)} />
+              </Field>
+            </>
+          )}
         </div>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Lunch start" hint="Optional: replaces the recorded lunch"><Input type="time" value={lunchStart} onChange={(e) => setLunchStart(e.target.value)} /></Field>
-          <Field label="Lunch end"><Input type="time" value={lunchEnd} onChange={(e) => setLunchEnd(e.target.value)} /></Field>
-        </div>
+        {!absent && (
+          <>
+            <p className="text-xs text-muted-foreground" data-testid="manual-zone-note">
+              Times are in the employee&apos;s work time zone.{overnight && <> This shift ends the next day.</>}
+            </p>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Lunch start" hint="Optional: replaces the recorded lunch"><Input type="time" value={lunchStart} onChange={(e) => setLunchStart(e.target.value)} /></Field>
+              <Field label="Lunch end"><Input type="time" value={lunchEnd} onChange={(e) => setLunchEnd(e.target.value)} /></Field>
+            </div>
+          </>
+        )}
+        {absent && <p className="text-xs text-muted-foreground">An absence is recorded without times or hours.</p>}
         <Field label="Status">
           <Select value={status} onChange={(e) => setStatus(e.target.value)}>
             <option value="present">Present</option><option value="late">Late</option>
