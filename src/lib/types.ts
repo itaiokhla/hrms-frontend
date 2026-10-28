@@ -34,6 +34,8 @@ export interface Me {
   brand_version?: string;
   /** `me.teams` (X 01 §11): own and led teams on the user's local today; null/absent on a legacy backend. */
   teams?: MeTeams | null;
+  /** Spine §15.7 rollout gate: attendance v2 is active for this company (set by the cut-over). */
+  attendance?: { v2: boolean };
 }
 
 /** `me.teams` / `GET /me/teams` (X 01 §11). `member_count` is only present on `/me/teams`. */

@@ -43,7 +43,10 @@ import {
 } from "lucide-react";
 
 import { can, canAny, canBeyondSelf, companyWide } from "./access";
-import { canSeeMySchedule, canSeeRosters, canSeeShifts, canSeeTeams } from "./attendance-routes";
+import {
+  attendanceV2, canManageAttendanceCutover, canSeeAttendanceExceptions, canSeeMySchedule, canSeeRosters, canSeeShifts,
+  canSeeTeams,
+} from "./attendance-routes";
 import { P, type PermissionCode } from "./permissions.generated";
 import type { Me } from "./types";
 
@@ -285,6 +288,12 @@ export const NAV: NavGroup[] = [
           // AS-M5: roster:plan ∨ roster:publish ∨ roster:read beyond SELF; My schedule for any linked employee.
           { label: "Rosters", href: "/rosters", icon: CalendarRange, visible: canSeeRosters },
           { label: "My schedule", href: "/rosters/my-schedule", icon: CalendarDays, visible: canSeeMySchedule },
+          // AS-M3 (V2 gate): decided days with exceptions, for readers beyond SELF.
+          { label: "Exceptions", href: "/attendance/exceptions", icon: ListChecks,
+            visible: (me) => attendanceV2(me) && canSeeAttendanceExceptions(me) },
+          // AS-M3: the attendance v2 cut-over (Settings › Attendance › Overview), company-wide policy managers.
+          { label: "Attendance setup", href: "/settings/attendance/overview", icon: Settings2,
+            visible: canManageAttendanceCutover },
         ],
       },
       {

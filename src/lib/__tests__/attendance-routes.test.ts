@@ -40,12 +40,26 @@ describe("shift route guards", () => {
     expect(ATTENDANCE_ROUTE_GUARDS["/attendance/shift-rules/[rule_id]"](planner)).toBe(true);
   });
 
-  it("gates every shift route GLOBAL (AS-M1 ships to every tenant) and the evaluated day V2 (AS-M3)", () => {
+  it("gates every shift route GLOBAL (AS-M1 ships to every tenant) and the evaluation pages V2 (AS-M3)", () => {
     expect(Object.keys(ATTENDANCE_ROUTE_GATES).sort()).toEqual(Object.keys(ATTENDANCE_ROUTE_GUARDS).sort());
-    const day = "/attendance/days/[employee_id]/[date]";
-    expect(ATTENDANCE_ROUTE_GATES[day]).toBe("V2");
-    const others = Object.entries(ATTENDANCE_ROUTE_GATES).filter(([path]) => path !== day).map(([, gate]) => gate);
+    const v2 = ["/attendance/days/[employee_id]/[date]", "/attendance/exceptions"];
+    expect(v2.map((path) => ATTENDANCE_ROUTE_GATES[path])).toEqual(["V2", "V2"]);
+    const others = Object.entries(ATTENDANCE_ROUTE_GATES).filter(([path]) => !v2.includes(path)).map(([, gate]) => gate);
     expect(new Set(others)).toEqual(new Set(["GLOBAL"]));
+  });
+
+  it("shows Exceptions only on v2 tenants and the cut-over only to company-wide policy managers (AS-M3)", () => {
+    const hr = me({ [P.ATTENDANCE_READ]: ["COMPANY"], [P.ATTENDANCE_MANAGE_POLICY]: ["COMPANY"] });
+    const branchHr = me({ [P.ATTENDANCE_READ]: ["BRANCH"], [P.ATTENDANCE_MANAGE_POLICY]: ["LEGAL_ENTITY"] });
+    expect(attendanceChildren(hr)).not.toContain("/attendance/exceptions");
+    expect(attendanceChildren({ ...hr, attendance: { v2: true } })).toContain("/attendance/exceptions");
+    expect(attendanceChildren(hr)).toContain("/settings/attendance/overview");
+    expect(attendanceChildren(branchHr)).not.toContain("/settings/attendance/overview");
+    expect(ATTENDANCE_ROUTE_GUARDS["/settings/attendance/overview"](branchHr)).toBe(false);
+    expect(ATTENDANCE_ROUTE_GUARDS["/settings/attendance/rules"](hr)).toBe(true);
+    expect(ATTENDANCE_ROUTE_GUARDS["/settings/attendance/rules"](branchHr)).toBe(false);
+    expect(ATTENDANCE_ROUTE_GUARDS["/attendance/exceptions"](branchHr)).toBe(true);
+    expect(ATTENDANCE_ROUTE_GUARDS["/attendance/exceptions"](me({ [P.ATTENDANCE_READ]: ["SELF"] }))).toBe(false);
   });
 
   it("opens an evaluated day for any attendance:read, SELF included (the API scopes the employee)", () => {

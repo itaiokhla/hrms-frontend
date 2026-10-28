@@ -8251,6 +8251,910 @@ export const POLICY_TYPES: PolicyTypeMeta[] = [
         "legal_sensitivity": "NONE"
       }
     ]
+  },
+  {
+    "code": "ATTENDANCE_REQUEST_POLICY",
+    "label": "Requests & approvals",
+    "gateSwitches": [],
+    "grain": "DAY",
+    "section": "Requests & approvals",
+    "spec": "AS spine §6.2.3",
+    "assignable": true,
+    "fields": [
+      {
+        "name": "profile",
+        "kind": "enum",
+        "choices": [
+          "LEGACY_V1",
+          "STANDARD"
+        ],
+        "default": "STANDARD",
+        "help": "LEGACY_V1 = no self-service requests (today).",
+        "legal_sensitivity": "NONE"
+      },
+      {
+        "name": "self_kinds",
+        "kind": "set",
+        "choices": [
+          "MISSED_PUNCH",
+          "ADD_SESSION",
+          "CORRECTION",
+          "VOID_SESSION",
+          "MARK_EXCUSE"
+        ],
+        "default": [
+          "MISSED_PUNCH",
+          "ADD_SESSION",
+          "CORRECTION",
+          "MARK_EXCUSE"
+        ],
+        "help": "What employees may request for themselves (never a status override).",
+        "legal_sensitivity": "NONE"
+      },
+      {
+        "name": "limits",
+        "kind": "list",
+        "item": {
+          "kind": "object",
+          "fields": [
+            {
+              "name": "kinds",
+              "kind": "set",
+              "choices": [
+                "MISSED_PUNCH",
+                "ADD_SESSION",
+                "CORRECTION",
+                "VOID_SESSION",
+                "MARK_EXCUSE",
+                "STATUS_OVERRIDE"
+              ],
+              "required": true,
+              "legal_sensitivity": "NONE"
+            },
+            {
+              "name": "period",
+              "kind": "enum",
+              "choices": [
+                "DAY",
+                "WEEK",
+                "CYCLE"
+              ],
+              "default": "CYCLE",
+              "legal_sensitivity": "NONE"
+            },
+            {
+              "name": "max_count",
+              "kind": "int",
+              "minimum": 1,
+              "maximum": 100,
+              "nullable": true,
+              "default": null,
+              "legal_sensitivity": "NONE"
+            },
+            {
+              "name": "max_minutes",
+              "kind": "int",
+              "minimum": 1,
+              "maximum": 2400,
+              "unit": "minutes",
+              "nullable": true,
+              "default": null,
+              "legal_sensitivity": "NONE"
+            }
+          ]
+        },
+        "default": [
+          {
+            "kinds": [
+              "MISSED_PUNCH",
+              "ADD_SESSION",
+              "CORRECTION"
+            ],
+            "period": "CYCLE",
+            "max_count": 4,
+            "max_minutes": null
+          },
+          {
+            "kinds": [
+              "MARK_EXCUSE"
+            ],
+            "period": "CYCLE",
+            "max_count": 2,
+            "max_minutes": null
+          }
+        ],
+        "help": "Request limits per day, week or attendance cycle.",
+        "legal_sensitivity": "NONE"
+      },
+      {
+        "name": "excuse",
+        "kind": "object",
+        "fields": [
+          {
+            "name": "max_minutes_per_request",
+            "kind": "int",
+            "minimum": 1,
+            "maximum": 480,
+            "unit": "minutes",
+            "nullable": true,
+            "default": null,
+            "legal_sensitivity": "NONE"
+          }
+        ],
+        "default": {
+          "max_minutes_per_request": null
+        },
+        "help": "Late / early excuses.",
+        "legal_sensitivity": "NONE"
+      },
+      {
+        "name": "blocked_day_results",
+        "kind": "set",
+        "choices": [
+          "PRESENT",
+          "HALF_DAY",
+          "ABSENT",
+          "MISSING_PUNCH",
+          "UNMARKED",
+          "PENDING",
+          "OFF"
+        ],
+        "default": [],
+        "help": "Day results on which an excuse cannot be filed.",
+        "legal_sensitivity": "NONE"
+      },
+      {
+        "name": "backdate_days",
+        "kind": "int",
+        "minimum": 0,
+        "maximum": 90,
+        "unit": "days",
+        "default": 7,
+        "help": "How far back a request may go.",
+        "legal_sensitivity": "NONE"
+      },
+      {
+        "name": "window_mode",
+        "kind": "enum",
+        "choices": [
+          "ROLLING",
+          "UNTIL_CUTOFF",
+          "ROLLING_AND_CUTOFF"
+        ],
+        "default": "ROLLING_AND_CUTOFF",
+        "help": "Requests close after the backdate days, the payroll cutoff, or both.",
+        "legal_sensitivity": "NONE"
+      },
+      {
+        "name": "future_days",
+        "kind": "int",
+        "minimum": 0,
+        "maximum": 31,
+        "unit": "days",
+        "default": 0,
+        "help": "How far ahead a request may go.",
+        "legal_sensitivity": "NONE"
+      },
+      {
+        "name": "comment_required",
+        "kind": "bool",
+        "default": false,
+        "help": "Every request needs a comment.",
+        "legal_sensitivity": "NONE"
+      },
+      {
+        "name": "attachment_required_kinds",
+        "kind": "set",
+        "choices": [
+          "MISSED_PUNCH",
+          "ADD_SESSION",
+          "CORRECTION",
+          "VOID_SESSION",
+          "MARK_EXCUSE",
+          "STATUS_OVERRIDE"
+        ],
+        "default": [],
+        "help": "Request kinds that need an attachment.",
+        "legal_sensitivity": "NONE"
+      },
+      {
+        "name": "on_duty",
+        "kind": "object",
+        "fields": [
+          {
+            "name": "enabled",
+            "kind": "bool",
+            "default": true,
+            "legal_sensitivity": "NONE"
+          },
+          {
+            "name": "remote_work_enabled",
+            "kind": "bool",
+            "default": false,
+            "legal_sensitivity": "NONE"
+          },
+          {
+            "name": "remote_work_counts_as_holiday_work",
+            "kind": "bool",
+            "default": false,
+            "legal_sensitivity": "NONE"
+          },
+          {
+            "name": "backdate_days",
+            "kind": "int",
+            "minimum": 0,
+            "maximum": 90,
+            "unit": "days",
+            "default": 7,
+            "legal_sensitivity": "NONE"
+          },
+          {
+            "name": "future_days",
+            "kind": "int",
+            "minimum": 0,
+            "maximum": 365,
+            "unit": "days",
+            "default": 60,
+            "legal_sensitivity": "NONE"
+          },
+          {
+            "name": "max_days_per_cycle",
+            "kind": "int",
+            "minimum": 1,
+            "maximum": 31,
+            "unit": "days",
+            "nullable": true,
+            "default": null,
+            "legal_sensitivity": "NONE"
+          },
+          {
+            "name": "partial_day_allowed",
+            "kind": "bool",
+            "default": true,
+            "legal_sensitivity": "NONE"
+          },
+          {
+            "name": "requires_punch",
+            "kind": "bool",
+            "default": false,
+            "legal_sensitivity": "NONE"
+          }
+        ],
+        "default": {
+          "enabled": true,
+          "remote_work_enabled": false,
+          "remote_work_counts_as_holiday_work": false,
+          "backdate_days": 7,
+          "future_days": 60,
+          "max_days_per_cycle": null,
+          "partial_day_allowed": true,
+          "requires_punch": false
+        },
+        "help": "On-duty and remote work.",
+        "legal_sensitivity": "NONE"
+      }
+    ]
+  },
+  {
+    "code": "SCHEDULING_POLICY",
+    "label": "Shifts & schedules",
+    "gateSwitches": [],
+    "grain": "DAY",
+    "section": "Shifts & schedules",
+    "spec": "AS spine §6.2.4",
+    "assignable": true,
+    "fields": [
+      {
+        "name": "profile",
+        "kind": "enum",
+        "choices": [
+          "LEGACY_V1",
+          "STANDARD"
+        ],
+        "default": "STANDARD",
+        "help": "LEGACY_V1 = placement shifts, no rosters (today).",
+        "legal_sensitivity": "NONE"
+      },
+      {
+        "name": "schedule_source",
+        "kind": "enum",
+        "choices": [
+          "PLACEMENT",
+          "ROSTER"
+        ],
+        "default": "PLACEMENT",
+        "help": "Shifts come from placements or rosters.",
+        "legal_sensitivity": "NONE"
+      },
+      {
+        "name": "holiday_mode",
+        "kind": "enum",
+        "choices": [
+          "HOLIDAY_OFF",
+          "WORK_THROUGH",
+          "HOLIDAY_SKELETON"
+        ],
+        "default": "HOLIDAY_OFF",
+        "help": "Holidays are off, worked through, or covered by a skeleton crew.",
+        "legal_sensitivity": "NONE"
+      },
+      {
+        "name": "skeleton_coverage",
+        "kind": "map",
+        "key": {
+          "kind": "text"
+        },
+        "value": {
+          "kind": "int",
+          "minimum": 1,
+          "maximum": 50
+        },
+        "default": {},
+        "help": "Skeleton crew per shift id on holidays.",
+        "legal_sensitivity": "NONE"
+      },
+      {
+        "name": "publish_notice_days",
+        "kind": "int",
+        "minimum": 0,
+        "maximum": 28,
+        "unit": "days",
+        "default": 7,
+        "help": "Rosters are published this many days ahead.",
+        "legal_sensitivity": "NONE"
+      },
+      {
+        "name": "rule_severity",
+        "kind": "map",
+        "key": {
+          "kind": "text"
+        },
+        "value": {
+          "kind": "enum",
+          "choices": [
+            "WARN",
+            "REQUIRE_REASON",
+            "BLOCK"
+          ]
+        },
+        "default": {},
+        "help": "Raise the severity of roster rules (never lower a pack's).",
+        "legal_sensitivity": "NONE"
+      },
+      {
+        "name": "min_rest_hours",
+        "kind": "int",
+        "minimum": 1,
+        "maximum": 48,
+        "unit": "hours",
+        "nullable": true,
+        "default": null,
+        "help": "Least rest between shifts.",
+        "legal_sensitivity": "NONE"
+      },
+      {
+        "name": "max_consecutive_days",
+        "kind": "int",
+        "minimum": 1,
+        "maximum": 31,
+        "unit": "days",
+        "nullable": true,
+        "default": null,
+        "help": "Most working days in a row.",
+        "legal_sensitivity": "NONE"
+      },
+      {
+        "name": "max_days_per_week",
+        "kind": "int",
+        "minimum": 1,
+        "maximum": 7,
+        "unit": "days",
+        "nullable": true,
+        "default": null,
+        "help": "Most working days per week.",
+        "legal_sensitivity": "NONE"
+      },
+      {
+        "name": "max_hours_per_week",
+        "kind": "int",
+        "minimum": 1,
+        "maximum": 168,
+        "unit": "hours",
+        "nullable": true,
+        "default": null,
+        "help": "Most hours per week.",
+        "legal_sensitivity": "NONE"
+      },
+      {
+        "name": "coverage_rules",
+        "kind": "list",
+        "item": {
+          "kind": "object",
+          "fields": [
+            {
+              "name": "team_id",
+              "kind": "int",
+              "minimum": 1,
+              "nullable": true,
+              "default": null,
+              "legal_sensitivity": "NONE"
+            },
+            {
+              "name": "branch_id",
+              "kind": "int",
+              "minimum": 1,
+              "nullable": true,
+              "default": null,
+              "legal_sensitivity": "NONE"
+            },
+            {
+              "name": "site_id",
+              "kind": "int",
+              "minimum": 1,
+              "nullable": true,
+              "default": null,
+              "legal_sensitivity": "NONE"
+            },
+            {
+              "name": "shift_id",
+              "kind": "int",
+              "minimum": 1,
+              "required": true,
+              "legal_sensitivity": "NONE"
+            },
+            {
+              "name": "weekdays",
+              "kind": "set",
+              "choices": [
+                "MON",
+                "TUE",
+                "WED",
+                "THU",
+                "FRI",
+                "SAT",
+                "SUN"
+              ],
+              "default": [],
+              "legal_sensitivity": "NONE"
+            },
+            {
+              "name": "min_count",
+              "kind": "int",
+              "minimum": 1,
+              "maximum": 500,
+              "default": 1,
+              "legal_sensitivity": "NONE"
+            },
+            {
+              "name": "required_tags",
+              "kind": "list",
+              "item": {
+                "kind": "text"
+              },
+              "default": [],
+              "legal_sensitivity": "NONE"
+            }
+          ]
+        },
+        "default": [],
+        "help": "Least staff per shift.",
+        "legal_sensitivity": "NONE"
+      },
+      {
+        "name": "requests",
+        "kind": "object",
+        "fields": [
+          {
+            "name": "swap",
+            "kind": "object",
+            "fields": [
+              {
+                "name": "enabled",
+                "kind": "bool",
+                "default": false,
+                "legal_sensitivity": "NONE"
+              },
+              {
+                "name": "cutoff_hours",
+                "kind": "int",
+                "minimum": 0,
+                "maximum": 336,
+                "unit": "hours",
+                "default": 24,
+                "legal_sensitivity": "NONE"
+              },
+              {
+                "name": "approval_required",
+                "kind": "bool",
+                "default": true,
+                "legal_sensitivity": "NONE"
+              },
+              {
+                "name": "max_per_period",
+                "kind": "int",
+                "minimum": 1,
+                "maximum": 1000,
+                "nullable": true,
+                "default": null,
+                "legal_sensitivity": "NONE"
+              },
+              {
+                "name": "limit_window",
+                "kind": "enum",
+                "choices": [
+                  "WEEK",
+                  "MONTH",
+                  "ATTENDANCE_CYCLE"
+                ],
+                "default": "MONTH",
+                "legal_sensitivity": "NONE"
+              },
+              {
+                "name": "approver_may_extend",
+                "kind": "bool",
+                "default": false,
+                "legal_sensitivity": "NONE"
+              }
+            ],
+            "default": {
+              "enabled": false,
+              "cutoff_hours": 24,
+              "approval_required": true,
+              "max_per_period": null,
+              "limit_window": "MONTH",
+              "approver_may_extend": false
+            },
+            "legal_sensitivity": "NONE"
+          },
+          {
+            "name": "drop",
+            "kind": "object",
+            "fields": [
+              {
+                "name": "enabled",
+                "kind": "bool",
+                "default": false,
+                "legal_sensitivity": "NONE"
+              },
+              {
+                "name": "cutoff_hours",
+                "kind": "int",
+                "minimum": 0,
+                "maximum": 336,
+                "unit": "hours",
+                "default": 24,
+                "legal_sensitivity": "NONE"
+              },
+              {
+                "name": "approval_required",
+                "kind": "bool",
+                "default": true,
+                "legal_sensitivity": "NONE"
+              },
+              {
+                "name": "max_per_period",
+                "kind": "int",
+                "minimum": 1,
+                "maximum": 1000,
+                "nullable": true,
+                "default": null,
+                "legal_sensitivity": "NONE"
+              },
+              {
+                "name": "limit_window",
+                "kind": "enum",
+                "choices": [
+                  "WEEK",
+                  "MONTH",
+                  "ATTENDANCE_CYCLE"
+                ],
+                "default": "MONTH",
+                "legal_sensitivity": "NONE"
+              },
+              {
+                "name": "approver_may_extend",
+                "kind": "bool",
+                "default": false,
+                "legal_sensitivity": "NONE"
+              },
+              {
+                "name": "pay_effect",
+                "kind": "enum",
+                "choices": [
+                  "PAID_OFF",
+                  "LEAVE_REQUIRED",
+                  "UNPAID_OFF"
+                ],
+                "nullable": true,
+                "default": null,
+                "legal_sensitivity": "NONE"
+              }
+            ],
+            "default": {
+              "enabled": false,
+              "cutoff_hours": 24,
+              "approval_required": true,
+              "max_per_period": null,
+              "limit_window": "MONTH",
+              "approver_may_extend": false,
+              "pay_effect": null
+            },
+            "legal_sensitivity": "NONE"
+          },
+          {
+            "name": "release",
+            "kind": "object",
+            "fields": [
+              {
+                "name": "enabled",
+                "kind": "bool",
+                "default": false,
+                "legal_sensitivity": "NONE"
+              },
+              {
+                "name": "cutoff_hours",
+                "kind": "int",
+                "minimum": 0,
+                "maximum": 336,
+                "unit": "hours",
+                "default": 24,
+                "legal_sensitivity": "NONE"
+              },
+              {
+                "name": "approval_required",
+                "kind": "bool",
+                "default": true,
+                "legal_sensitivity": "NONE"
+              },
+              {
+                "name": "max_per_period",
+                "kind": "int",
+                "minimum": 1,
+                "maximum": 1000,
+                "nullable": true,
+                "default": null,
+                "legal_sensitivity": "NONE"
+              },
+              {
+                "name": "limit_window",
+                "kind": "enum",
+                "choices": [
+                  "WEEK",
+                  "MONTH",
+                  "ATTENDANCE_CYCLE"
+                ],
+                "default": "MONTH",
+                "legal_sensitivity": "NONE"
+              },
+              {
+                "name": "approver_may_extend",
+                "kind": "bool",
+                "default": false,
+                "legal_sensitivity": "NONE"
+              },
+              {
+                "name": "pay_effect",
+                "kind": "enum",
+                "choices": [
+                  "PAID_OFF",
+                  "LEAVE_REQUIRED",
+                  "UNPAID_OFF"
+                ],
+                "nullable": true,
+                "default": null,
+                "legal_sensitivity": "NONE"
+              }
+            ],
+            "default": {
+              "enabled": false,
+              "cutoff_hours": 48,
+              "approval_required": true,
+              "max_per_period": null,
+              "limit_window": "MONTH",
+              "approver_may_extend": false,
+              "pay_effect": null
+            },
+            "legal_sensitivity": "NONE"
+          },
+          {
+            "name": "pickup_approval_required",
+            "kind": "bool",
+            "default": true,
+            "legal_sensitivity": "NONE"
+          },
+          {
+            "name": "change_enabled",
+            "kind": "bool",
+            "default": true,
+            "legal_sensitivity": "NONE"
+          },
+          {
+            "name": "change_cutoff_hours",
+            "kind": "int",
+            "minimum": 0,
+            "maximum": 336,
+            "unit": "hours",
+            "default": 48,
+            "legal_sensitivity": "NONE"
+          }
+        ],
+        "default": {
+          "swap": {
+            "enabled": false,
+            "cutoff_hours": 24,
+            "approval_required": true,
+            "max_per_period": null,
+            "limit_window": "MONTH",
+            "approver_may_extend": false
+          },
+          "drop": {
+            "enabled": false,
+            "cutoff_hours": 24,
+            "approval_required": true,
+            "max_per_period": null,
+            "limit_window": "MONTH",
+            "approver_may_extend": false,
+            "pay_effect": null
+          },
+          "release": {
+            "enabled": false,
+            "cutoff_hours": 48,
+            "approval_required": true,
+            "max_per_period": null,
+            "limit_window": "MONTH",
+            "approver_may_extend": false,
+            "pay_effect": null
+          },
+          "pickup_approval_required": true,
+          "change_enabled": true,
+          "change_cutoff_hours": 48
+        },
+        "help": "Swaps, drops, releases, pickups and changes.",
+        "legal_sensitivity": "NONE"
+      },
+      {
+        "name": "open_shift_eligibility",
+        "kind": "object",
+        "fields": [
+          {
+            "name": "same_team",
+            "kind": "bool",
+            "default": true,
+            "legal_sensitivity": "NONE"
+          },
+          {
+            "name": "same_branch",
+            "kind": "bool",
+            "default": true,
+            "legal_sensitivity": "NONE"
+          },
+          {
+            "name": "priority",
+            "kind": "enum",
+            "choices": [
+              "NONE",
+              "EXISTING_PART_TIME_FIRST"
+            ],
+            "default": "NONE",
+            "legal_sensitivity": "NONE"
+          },
+          {
+            "name": "exclusive_window_hours",
+            "kind": "int",
+            "minimum": 0,
+            "maximum": 168,
+            "unit": "hours",
+            "default": 0,
+            "legal_sensitivity": "NONE"
+          }
+        ],
+        "default": {
+          "same_team": true,
+          "same_branch": true,
+          "priority": "NONE",
+          "exclusive_window_hours": 0
+        },
+        "help": "Who may pick up open shifts.",
+        "legal_sensitivity": "NONE"
+      },
+      {
+        "name": "availability",
+        "kind": "object",
+        "fields": [
+          {
+            "name": "enabled",
+            "kind": "bool",
+            "default": false,
+            "legal_sensitivity": "NONE"
+          },
+          {
+            "name": "change_notice_days",
+            "kind": "int",
+            "minimum": 0,
+            "maximum": 60,
+            "unit": "days",
+            "default": 7,
+            "legal_sensitivity": "NONE"
+          },
+          {
+            "name": "approval_required",
+            "kind": "bool",
+            "default": true,
+            "legal_sensitivity": "NONE"
+          }
+        ],
+        "default": {
+          "enabled": false,
+          "change_notice_days": 7,
+          "approval_required": true
+        },
+        "help": "Employee availability.",
+        "legal_sensitivity": "NONE"
+      },
+      {
+        "name": "acknowledge_published_shifts",
+        "kind": "bool",
+        "default": false,
+        "help": "Employees acknowledge published shifts.",
+        "legal_sensitivity": "NONE"
+      },
+      {
+        "name": "work_location_plan",
+        "kind": "object",
+        "fields": [
+          {
+            "name": "mode",
+            "kind": "enum",
+            "choices": [
+              "NONE",
+              "PATTERN",
+              "ROSTER"
+            ],
+            "default": "NONE",
+            "legal_sensitivity": "NONE"
+          },
+          {
+            "name": "pattern",
+            "kind": "map",
+            "key": {
+              "kind": "enum",
+              "choices": [
+                "MON",
+                "TUE",
+                "WED",
+                "THU",
+                "FRI",
+                "SAT",
+                "SUN"
+              ]
+            },
+            "value": {
+              "kind": "enum",
+              "choices": [
+                "ON_SITE",
+                "REMOTE",
+                "EMPLOYEE_CHOICE"
+              ]
+            },
+            "default": {},
+            "legal_sensitivity": "NONE"
+          }
+        ],
+        "default": {
+          "mode": "NONE",
+          "pattern": {}
+        },
+        "help": "Office, home or choice per day.",
+        "legal_sensitivity": "NONE"
+      },
+      {
+        "name": "lints_enabled",
+        "kind": "bool",
+        "default": true,
+        "help": "Show roster lints while planning.",
+        "legal_sensitivity": "NONE"
+      }
+    ]
   }
 ] as PolicyTypeMeta[];
 

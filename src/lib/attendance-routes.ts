@@ -1,4 +1,4 @@
-import { can, canBeyondSelf } from "./access";
+import { can, canBeyondSelf, companyWide } from "./access";
 import { P } from "./permissions.generated";
 import type { Me } from "./types";
 
@@ -54,8 +54,26 @@ export function canOpenAttendanceDay(me: Me): boolean {
   return can(me, P.ATTENDANCE_READ);
 }
 
+/** Exceptions list (AS-M3): `attendance:read` beyond SELF (an employee opens their own days from My attendance). */
+export function canSeeAttendanceExceptions(me: Me): boolean {
+  return canBeyondSelf(me, P.ATTENDANCE_READ);
+}
+
+/** Settings › Attendance › Overview (cut-over): `attendance:manage_policy` at COMPANY scope (the API checks it too). */
+export function canManageAttendanceCutover(me: Me): boolean {
+  return companyWide(me, P.ATTENDANCE_MANAGE_POLICY);
+}
+
+/** The V2 rollout gate (spine §15.7): `me.attendance.v2`, set by the cut-over. */
+export function attendanceV2(me: Me): boolean {
+  return me.attendance?.v2 === true;
+}
+
 export const ATTENDANCE_ROUTE_GUARDS: Record<string, (me: Me) => boolean> = {
   "/attendance/days/[employee_id]/[date]": canOpenAttendanceDay,
+  "/attendance/exceptions": canSeeAttendanceExceptions,
+  "/settings/attendance/overview": canManageAttendanceCutover,
+  "/settings/attendance/rules": canManageAttendanceCutover,
   "/teams": canSeeTeams,
   "/teams/[team_id]": canOpenTeam,
   "/attendance/shifts": canSeeShifts,
@@ -68,6 +86,9 @@ export const ATTENDANCE_ROUTE_GUARDS: Record<string, (me: Me) => boolean> = {
 
 export const ATTENDANCE_ROUTE_GATES: Record<string, AttendanceGate> = {
   "/attendance/days/[employee_id]/[date]": "V2",
+  "/attendance/exceptions": "V2",
+  "/settings/attendance/overview": "GLOBAL",
+  "/settings/attendance/rules": "GLOBAL",
   "/teams": "GLOBAL",
   "/teams/[team_id]": "GLOBAL",
   "/attendance/shifts": "GLOBAL",

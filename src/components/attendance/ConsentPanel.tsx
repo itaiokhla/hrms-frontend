@@ -17,7 +17,7 @@ import {
   CHANNEL_LABEL, CONSENT_STATUS, GEOFENCE_LABEL, LEGAL_BASIS_LABEL, LOCATION_LABEL, SOURCE_LABEL,
 } from "./captureModel";
 
-const fade = { initial: { opacity: 0, y: 10 }, animate: { opacity: 1, y: 0 }, transition: { duration: 0.3, ease: [0.22, 1, 0.36, 1] } };
+const fade = { initial: { opacity: 0, y: 10 }, animate: { opacity: 1, y: 0 }, transition: { duration: 0.3, ease: [0.22, 1, 0.36, 1] as [number, number, number, number] } };
 
 /**
  * The transparency panel `/me/attendance/privacy` (07 §12, SR-AS-14; 09-ui-ux/02 §14): what is collected and when,

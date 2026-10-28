@@ -7,6 +7,7 @@ import toast from "react-hot-toast";
 import { RequireAccess, useCan } from "@/components/access/Can";
 import { LocationReviewPanel } from "@/components/attendance/LocationReviewPanel";
 import { MyAttendanceCard } from "@/components/attendance/MyAttendanceCard";
+import { MyDayEvaluation } from "@/components/attendance/days/MyDayEvaluation";
 import { SessionDrawer } from "@/components/attendance/SessionDrawer";
 import { EmployeePicker, type PickedEmployee } from "@/components/shared/EmployeePicker";
 import { Button } from "@/components/ui/button";
@@ -73,6 +74,7 @@ function MyAttendance() {
 
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,420px)_1fr]">
+      <MyDayEvaluation refreshKey={today} />
       <MyAttendanceCard data={today} onChange={(next) => { setData(next); void reloadHistory(); }} onReload={() => { void reload(); void reloadHistory(); }} />
       <Card>
         <CardHeader title="Last 30 days" description="Net time excludes unpaid lunch." />
