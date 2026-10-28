@@ -22,6 +22,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import toast from "react-hot-toast";
 
 import { CameraCapture, type CameraHandle } from "@/components/shared/CameraCapture";
+import { MyShiftToday } from "@/components/shifts/MyShiftToday";
 import { Button } from "@/components/ui/button";
 import { Field, Textarea } from "@/components/ui/field";
 import { LiveClock } from "@/components/ui/layout";
@@ -108,6 +109,7 @@ export function MyAttendanceCard({ data, onChange, onReload }: {
   const live = data?.attendance_state === "WORKING" || data?.attendance_state === "ON_LUNCH";
   const now = useTicker(live);
   const bridge = useTracking((s) => s.bridge);
+  const me = useSession((s) => s.me);
 
   const applyResult = useCallback(
     (next: MyAttendance, action: AttendanceAction) => {
@@ -161,6 +163,7 @@ export function MyAttendanceCard({ data, onChange, onReload }: {
         <div className="absolute -right-10 -top-10 h-40 w-40 rounded-full bg-white/10 blur-2xl" />
         <p className="text-sm opacity-90">{fmtDate(new Date().toISOString(), "EEEE, d MMMM")}</p>
         <LiveClock className="mt-1 block font-display text-4xl font-semibold" />
+        {me?.employee && <MyShiftToday employeeId={me.employee.id} zone={me.company.timezone} />}
         <AnimatePresence mode="wait">
           <motion.p key={state} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
             className="mt-3 flex items-center gap-2 text-sm" role="status" aria-live="polite">

@@ -188,6 +188,9 @@ export interface ExplainDay {
   shift_id: number | null;
   shift_version_id: number | null;
   rule_id?: number | null;
+  shift_code?: string | null;
+  kind?: string | null;
+  anchor_timezone?: string | null;
   work_timezone?: string;
   start_time?: string | null;
   end_time?: string | null;

@@ -17,6 +17,7 @@ import { can, canAny, canBeyondSelf } from "@/lib/access";
 import { cn } from "@/lib/cn";
 import { fmtDate, fromNow, titleCase, todayISO } from "@/lib/format";
 import { useApi } from "@/lib/hooks";
+import { withStepUp } from "@/lib/payroll/api";
 import { P } from "@/lib/permissions.generated";
 import type { ChainStep, LeaveBalance, LeaveRequest, LeaveType, Page, Role } from "@/lib/types";
 
@@ -242,7 +243,8 @@ function Approvals({ items, reload }: { items?: LeaveRequest[]; reload: () => Pr
   const act = async (leave: LeaveRequest, approve: boolean) => {
     setBusy(leave.id);
     try {
-      await api.post(`/leaves/${leave.id}/${approve ? "approve" : "reject"}`, { remarks: remarks[leave.id] || null });
+      // An override can need a fresh step-up when the tenant asks for it (LH-SEC-02).
+      await withStepUp(() => api.post(`/leaves/${leave.id}/${approve ? "approve" : "reject"}`, { remarks: remarks[leave.id] || null }));
       toast.success(approve ? "Approved" : "Rejected");
       await reload();
     } catch (e) {

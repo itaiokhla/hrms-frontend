@@ -4,7 +4,7 @@ import { motion } from "framer-motion";
 import { ArrowLeft, CalendarClock, Copy, Power } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
 
 import { Button } from "@/components/ui/button";
@@ -83,6 +83,14 @@ export function WorkWeekDetailPage({ id }: { id: number }) {
   const [year, setYear] = useState<number | null>(null);
   const shownYear = year ?? Number(today.slice(0, 4));
   const [crewOpen, setCrewOpen] = useState(false);
+  // Switch tabs only once the modal's own URL change has landed (both rewrite the query string).
+  const [tabAfterClose, setTabAfterClose] = useState<Tab | null>(null);
+  useEffect(() => {
+    if (tabAfterClose && !modal.open) {
+      setTab(tabAfterClose);
+      setTabAfterClose(null);
+    }
+  }, [tabAfterClose, modal.open, setTab]);
   const [crew, setCrew] = useState({ name: "", offset: 7 });
 
   const monthPreview = useApi(
@@ -328,7 +336,7 @@ export function WorkWeekDetailPage({ id }: { id: number }) {
             onSaved={() => {
               setDirty(false);
               void modal.close({ force: true }).then(() => reload());
-              setTab("versions");
+              setTabAfterClose("versions");
             }}
           />
         ) : (

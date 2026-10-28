@@ -65,7 +65,7 @@ test("Orbit Logistics signs up and onboards its team entirely in the browser", a
 
   await step(page, "The founder is Company Administrator with every menu", async () => {
     expect(await sidebarLinks(page)).toEqual([
-      "Dashboard", "Attendance", "Leave", "Holidays", "Payslips", "Assets", "Employees", "Organization",
+      "Dashboard", "Attendance", "Leave", "Holidays", "Payslips", "Assets", "Employees", "Organization", "Teams",
       "Payroll", "Face kiosk", "Reports", "Users", "Roles & access", "Audit log", "Company settings",
       "Branding & domains", "Legal entities & branches",
     ]);

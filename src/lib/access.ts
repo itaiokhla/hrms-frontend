@@ -15,7 +15,9 @@ export function can(me: Me | null | undefined, code: PermissionCode, scope?: Sco
   if (held.length === 0) return false;
   if (!scope) return true;
   if (held.includes("COMPANY") || held.includes(scope)) return true;
-  return scope === "DIRECT_REPORTS" && held.includes("REPORTING_TREE");
+  if (scope === "DIRECT_REPORTS" && held.includes("REPORTING_TREE")) return true;
+  // COMPANY ⊇ TEAM_TREE ⊇ TEAM (X 01 §4.1)
+  return scope === "TEAM" && held.includes("TEAM_TREE");
 }
 
 export function canAny(me: Me | null | undefined, codes: PermissionCode[]): boolean {

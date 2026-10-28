@@ -63,6 +63,7 @@ test("AS-M0 (a)-(f): punches, overnight manual entry, paged history, settings, O
     await expect(dialog.getByTestId("manual-zone-note")).toContainText("work time zone");
     await shot(page, testInfo, "b1-overnight-hint");
     await dialog.getByRole("button", { name: "Save" }).click();
+    await expect(dialog).toHaveCount(0);  // closed after the save (a toast from an earlier save may still show)
     await toast(page, "Attendance recorded");
     const rows = await api(page, "GET", `/attendance?start_date=2026-10-26&end_date=2026-10-26&employee_id=${employeeId("alpha", "sameer")}`);
     const night = rows.data.items[0];
@@ -77,6 +78,7 @@ test("AS-M0 (a)-(f): punches, overnight manual entry, paged history, settings, O
     await dialog.getByLabel("Status").selectOption("absent");
     await expect(dialog.getByLabel("Check in")).toHaveCount(0);
     await dialog.getByRole("button", { name: "Save" }).click();
+    await expect(dialog).toHaveCount(0);  // closed after the save (a toast from an earlier save may still show)
     await toast(page, "Attendance recorded");
     const absent = await api(page, "GET", `/attendance?start_date=2026-10-23&end_date=2026-10-23&employee_id=${employeeId("alpha", "pooja")}`);
     expect(absent.data.items[0].status).toBe("absent");
@@ -120,7 +122,12 @@ test("AS-M0 (a)-(f): punches, overnight manual entry, paged history, settings, O
     await expect(option).toHaveCount(1);
     const carlos = (await option.textContent())?.trim() ?? "";
     await form.locator("select", { has: emily.page.locator("option", { hasText: "Carlos Diaz" }) }).selectOption({ label: carlos });
-    await form.getByLabel("Date").fill("2026-10-22");
+    // A rerun on the same seed finds the earlier entry: take the first October weekday without one.
+    const taken = await api(emily.page, "GET",
+      `/overtime/entries?employee_id=${employeeId("gamma", "carlos")}&start=2026-10-01&end=2026-10-31&limit=100`);
+    const used = new Set(((taken.data.items ?? taken.data) as { date: string }[]).map((e) => e.date));
+    const day = ["2026-10-22", "2026-10-21", "2026-10-20", "2026-10-19", "2026-10-23", "2026-10-26"].find((d) => !used.has(d))!;
+    await form.getByLabel("Date").fill(day);
     await form.getByLabel("Hours").fill("8");
     await form.getByLabel("From (optional)").fill("22:00");
     await form.getByLabel("To (optional)").fill("06:00");
@@ -133,22 +140,24 @@ test("AS-M0 (a)-(f): punches, overnight manual entry, paged history, settings, O
   });
 
   await test.step("(f) the shift form round-trips the unpaid break", async () => {
+    // G-01 wrote the break in place; from AS-M1 (G-04) a legacy edit is a version from the owner's local tomorrow
+    // (A-24), so the form keeps today's value and the new version carries the edit.
     const owner = await openAs(browser, "alpha", "founder");
     const page2 = owner.page;
     await page2.goto("/settings");
     await page2.getByRole("tab", { name: "Departments & shifts" }).click();
-    await page2.getByRole("cell", { name: "GEN", exact: true }).click();
+    await page2.getByRole("cell", { name: /^(GEN|General Shift)$/ }).first().click();
     const dialog = page2.getByRole("dialog", { name: "Edit shift" });
     await expect(dialog.getByLabel("Unpaid break (minutes)")).toHaveValue("60");
     await dialog.getByLabel("Unpaid break (minutes)").fill("45");
     await dialog.getByRole("button", { name: "Save" }).click();
     await toast(page2, "Shift saved");
-    await page2.getByRole("cell", { name: "GEN", exact: true }).click();
-    await expect(dialog.getByLabel("Unpaid break (minutes)")).toHaveValue("45");
-    await dialog.getByLabel("Unpaid break (minutes)").fill("60");
-    await dialog.getByRole("button", { name: "Save" }).click();
-    await toast(page2, "Shift saved");
+    const shifts = await api(page2, "GET", "/shifts?q=GEN&status=ALL&limit=50");
+    const gen = shifts.data.items.find((s: any) => s.code === "GEN");
+    const versions = (await api(page2, "GET", `/shifts/${gen.id}/versions`)).data;
+    expect(versions[versions.length - 1].unpaid_break_minutes).toBe(45);
     await shot(page2, testInfo, "f-unpaid-break");
+    // A rerun posts the same edit again: tomorrow's scheduled version is replaced, not stacked.
     await owner.close();
   });
 

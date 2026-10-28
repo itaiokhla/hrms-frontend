@@ -34,6 +34,17 @@ describe("scope semantics mirror the backend", () => {
     expect(can(tree, P.LEAVE_APPROVE, "COMPANY")).toBe(false);
   });
 
+  it("COMPANY ⊇ TEAM_TREE ⊇ TEAM (X 01 §4.1)", () => {
+    const tree = me({ [P.LEAVE_APPROVE]: ["TEAM_TREE"] });
+    expect(can(tree, P.LEAVE_APPROVE, "TEAM")).toBe(true);
+    expect(can(tree, P.LEAVE_APPROVE, "TEAM_TREE")).toBe(true);
+    expect(can(tree, P.LEAVE_APPROVE, "COMPANY")).toBe(false);
+    expect(can(tree, P.LEAVE_APPROVE, "ASSIGNED_TEAMS")).toBe(false);
+    const team = me({ [P.LEAVE_APPROVE]: ["TEAM"] });
+    expect(can(team, P.LEAVE_APPROVE, "TEAM_TREE")).toBe(false);
+    expect(can(me({ [P.LEAVE_APPROVE]: ["COMPANY"] }), P.LEAVE_APPROVE, "TEAM_TREE")).toBe(true);
+  });
+
   it("denies by default", () => {
     expect(can(me({}), P.EMPLOYEE_READ)).toBe(false);
     expect(can(null, P.EMPLOYEE_READ)).toBe(false);

@@ -32,6 +32,15 @@ export interface Me {
   registry_version: string;
   /** Version of the company's published brand; differs from the page's when a new brand was published. */
   brand_version?: string;
+  /** `me.teams` (X 01 §11): own and led teams on the user's local today; null/absent on a legacy backend. */
+  teams?: MeTeams | null;
+}
+
+/** `me.teams` / `GET /me/teams` (X 01 §11). `member_count` is only present on `/me/teams`. */
+export interface MeTeams {
+  member_of: { id: number; name: string; code?: string; primary: boolean }[];
+  leads: { id: number; name: string; code?: string; routing: boolean; member_role?: string; member_count?: number }[];
+  acting_for: { employee_id: number; name: string | null; until: string }[];
 }
 
 export interface Page<T> {

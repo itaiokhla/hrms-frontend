@@ -19,6 +19,7 @@ import { useApi } from "@/lib/hooks";
 import { P } from "@/lib/permissions.generated";
 import type { Department, Shift } from "@/lib/types";
 import { useSession } from "@/store/session";
+import { crossesMidnight, durationHours, fmtMinutes } from "@/components/shifts/shiftModel";
 
 type Settings = Record<string, string | number | boolean>;
 
@@ -33,11 +34,13 @@ export default function SettingsPage() {
 function CompanySettings() {
   const { me } = useCan();
   const [tab, setTab] = useState("company");
+  const structure = can(me, P.DEPARTMENT_MANAGE) || can(me, P.SHIFT_MANAGE);
   const tabs = [
     { value: "company", label: "Company" },
     { value: "policies", label: "Policies" },
     { value: "attendance", label: "Attendance & location" },
-    ...(can(me, P.DEPARTMENT_MANAGE) ? [{ value: "structure", label: "Departments & shifts" }] : []),
+    // shift:manage holders keep the tab (department:manage stays an alias for one release, AS-M1 A-14).
+    ...(structure ? [{ value: "structure", label: "Departments & shifts" }] : []),
   ];
   return (
     <div>
@@ -46,7 +49,7 @@ function CompanySettings() {
         <TabPanel value="company"><General /></TabPanel>
         <TabPanel value="policies"><Policies /></TabPanel>
         <TabPanel value="attendance"><PolicySettings /></TabPanel>
-        {can(me, P.DEPARTMENT_MANAGE) && <TabPanel value="structure"><Structure /></TabPanel>}
+        {structure && <TabPanel value="structure"><Structure departments={can(me, P.DEPARTMENT_MANAGE)} manageShifts={can(me, P.SHIFT_MANAGE)} /></TabPanel>}
       </Tabs>
     </div>
   );
@@ -150,8 +153,8 @@ function Policies() {
   );
 }
 
-function Structure() {
-  const { data: departments, reload } = useApi(() => api.get<Department[]>("/departments"), []);
+function Structure({ departments: showDepartments = true, manageShifts = false }: { departments?: boolean; manageShifts?: boolean }) {
+  const { data: departments, reload } = useApi(() => api.get<Department[]>("/departments"), [], { enabled: showDepartments });
   const { data: shifts, reload: reloadShifts } = useApi(() => api.get<Shift[]>("/shifts"), []);
   const [dept, setDept] = useState<Partial<Department> | null>(null);
   const [head, setHead] = useState<PickedEmployee | null>(null);
@@ -178,7 +181,12 @@ function Structure() {
   const saveShift = async () => {
     if (!shift) return;
     try {
-      const body = { name: shift.name, start_time: shift.start_time, end_time: shift.end_time, duration_hours: shift.duration_hours || null,
+      // BUG-AS-23: a new shift or changed times send the computed span (end − start, crossing midnight), never a
+      // silent null; unchanged times keep the stored value so a rename creates no new version.
+      const original = shifts?.find((s) => s.id === shift.id);
+      const timesChanged = !original || original.start_time !== shift.start_time || original.end_time !== shift.end_time;
+      const duration = timesChanged ? durationHours(shift.start_time, shift.end_time) : shift.duration_hours || null;
+      const body = { name: shift.name, start_time: shift.start_time, end_time: shift.end_time, duration_hours: duration,
         unpaid_break_minutes: shift.unpaid_break_minutes ?? null, is_flexible: !!shift.is_flexible, is_active: shift.is_active ?? true };
       if (shift.id) await api.put(`/shifts/${shift.id}`, body);
       else await api.post("/shifts", body);
@@ -192,7 +200,7 @@ function Structure() {
 
   return (
     <div className="grid gap-6 xl:grid-cols-2">
-      <Card>
+      {showDepartments && <Card>
         <CardHeader title="Departments" description="Department heads can be approvers and get department-scoped access."
           action={<Button size="sm" onClick={() => setDept({ is_active: true })}><Plus className="h-4 w-4" /> Add</Button>} />
         <DataTable rows={departments} loading={!departments} rowKey={(d) => d.id} onRowClick={(d) => setDept(d)}
@@ -203,10 +211,14 @@ function Structure() {
             { key: "c", header: "People", cell: (d) => d.employee_count },
             { key: "s", header: "Status", cell: (d) => <StatusBadge status={d.is_active ? "active" : "deactivated"} label={d.is_active ? "Active" : "Inactive"} /> },
           ]} />
-      </Card>
+      </Card>}
       <Card>
         <CardHeader title="Shifts" description="Used for late detection and payroll."
-          action={<Button size="sm" onClick={() => setShift({ start_time: "09:00", end_time: "18:00", is_active: true })}><Plus className="h-4 w-4" /> Add</Button>} />
+          action={<div className="flex items-center gap-2">
+            {/* BUG-AS-38: versions, rules and bulk assign live on the Shifts page. */}
+            {manageShifts && <Link href="/attendance/shifts" className="text-sm font-medium text-primary hover:underline">Manage shifts</Link>}
+            <Button size="sm" onClick={() => setShift({ start_time: "09:00", end_time: "18:00", is_active: true })}><Plus className="h-4 w-4" /> Add</Button>
+          </div>} />
         <DataTable rows={shifts} loading={!shifts} rowKey={(s) => s.id} onRowClick={(s) => setShift(s)}
           columns={[
             { key: "n", header: "Shift", cell: (s) => <span className="font-medium">{s.name}</span> },
@@ -242,6 +254,14 @@ function Structure() {
               <Field label="Starts"><Input type="time" value={shift.start_time ?? ""} onChange={(e) => setShift({ ...shift, start_time: e.target.value })} /></Field>
               <Field label="Ends"><Input type="time" value={shift.end_time ?? ""} onChange={(e) => setShift({ ...shift, end_time: e.target.value })} /></Field>
             </div>
+            <p className="text-sm text-muted-foreground" data-testid="shift-duration">
+              {(() => {
+                const hours = durationHours(shift.start_time, shift.end_time);
+                if (hours === null) return "Duration: enter the start and end times.";
+                const overnight = crossesMidnight(shift.start_time!, shift.end_time!);
+                return `Duration: ${fmtMinutes(Math.round(hours * 60))} h${overnight ? " (ends the next day)" : ""}`;
+              })()}
+            </p>
             <Field label="Unpaid break (minutes)" hint="Not paid and not counted as worked time, e.g. a 60-minute lunch.">
               <Input type="number" min={0} max={1440} inputMode="numeric" value={shift.unpaid_break_minutes ?? ""}
                 onChange={(e) => setShift({ ...shift, unpaid_break_minutes: e.target.value === "" ? null : Number(e.target.value) })} />

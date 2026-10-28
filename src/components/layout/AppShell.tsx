@@ -23,6 +23,7 @@ import { LocationTracker } from "@/components/attendance/LocationTracker";
 import { BrandMark, BrandWordmark } from "@/components/brand/BrandLogo";
 import { useBrand } from "@/components/brand/BrandProvider";
 import { TrackingIndicator } from "@/components/attendance/TrackingIndicator";
+import { MyTeamsMenu } from "@/components/teams/MyTeamsMenu";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, MenuItem, MenuLabel, MenuSeparator } from "@/components/ui/overlay";
 import { Avatar } from "@/components/ui/primitives";
@@ -345,6 +346,7 @@ function Topbar({ onMenu }: { onMenu: () => void }) {
         <MenuItem icon={<UserRound />} onSelect={() => router.push("/account")}>
           My account
         </MenuItem>
+        <MyTeamsMenu me={me} />
         <MenuSeparator />
         <MenuItem icon={<LogOut />} tone="danger" onSelect={signOut}>
           Sign out

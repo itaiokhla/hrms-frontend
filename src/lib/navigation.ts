@@ -4,6 +4,7 @@ import {
   Boxes,
   Calculator,
   CalendarCheck2,
+  CalendarClock,
   CalendarDays,
   CalendarRange,
   ClipboardCheck,
@@ -35,12 +36,14 @@ import {
   UserCog,
   UserRoundCog,
   Users,
+  UsersRound,
   Wallet,
   WalletCards,
   type LucideIcon,
 } from "lucide-react";
 
 import { can, canAny, canBeyondSelf, companyWide } from "./access";
+import { canSeeMySchedule, canSeeRosters, canSeeShifts, canSeeTeams } from "./attendance-routes";
 import { P, type PermissionCode } from "./permissions.generated";
 import type { Me } from "./types";
 
@@ -277,6 +280,11 @@ export const NAV: NavGroup[] = [
             icon: ListChecks,
             visible: (me) => canAny(me, [P.TASK_READ, P.TASK_MANAGE, P.TASK_APPROVE]),
           },
+          // AS-M1 A15: shift:manage ∨ shift:assign ∨ shift:read beyond SELF (an employee's SELF read never shows it).
+          { label: "Shifts", href: "/attendance/shifts", icon: CalendarClock, visible: canSeeShifts },
+          // AS-M5: roster:plan ∨ roster:publish ∨ roster:read beyond SELF; My schedule for any linked employee.
+          { label: "Rosters", href: "/rosters", icon: CalendarRange, visible: canSeeRosters },
+          { label: "My schedule", href: "/rosters/my-schedule", icon: CalendarDays, visible: canSeeMySchedule },
         ],
       },
       {
@@ -290,10 +298,12 @@ export const NAV: NavGroup[] = [
         href: "/holidays",
         icon: CalendarDays,
         visible: (me) => can(me, P.HOLIDAY_READ),
-        // LH-M1 children (LH 09-ui-ux/01 §3.1); calendars, next year and settings join with the calendar goal.
+        // LH-M1 children (LH 09-ui-ux/01 §3.1); settings join with WI-1.10.
         children: [
           { label: "Calendar", href: "/holidays", icon: CalendarDays, visible: (me) => can(me, P.HOLIDAY_READ) },
+          { label: "Calendars", href: "/holidays/calendars", icon: CalendarRange, visible: (me) => can(me, P.HOLIDAY_MANAGE) },
           { label: "Work weeks", href: "/holidays/work-weeks", icon: CalendarCheck2, visible: (me) => can(me, P.HOLIDAY_MANAGE) },
+          { label: "Next year", href: "/holidays/rollover", icon: CalendarRange, visible: (me) => can(me, P.HOLIDAY_MANAGE) },
         ],
       },
       {
@@ -317,6 +327,8 @@ export const NAV: NavGroup[] = [
         icon: Network,
         visible: (me) => canBeyondSelf(me, P.EMPLOYEE_READ) || can(me, P.ORG_MANAGE_HIERARCHY),
       },
+      // X-M1 (X 01 §15.3): team:read beyond SELF ∨ team:manage; an employee's own teams are under "My teams".
+      { label: "Teams", href: "/teams", icon: UsersRound, visible: canSeeTeams },
     ],
   },
   {

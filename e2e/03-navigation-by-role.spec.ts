@@ -5,12 +5,14 @@ const SELF_SERVICE = ["Dashboard", "Attendance", "Leave", "Holidays", "Payslips"
 const PERSONAS: { who: string; email: string; roles: string; menu: string[] }[] = [
   { who: "Divya", email: NIMBUS.divya, roles: "Employee", menu: SELF_SERVICE },
   { who: "Arjun", email: NIMBUS.lead, roles: "Employee + custom Team Lead", menu: [...SELF_SERVICE, "Employees", "Organization", "Reports"] },
-  { who: "Sneha", email: NIMBUS.manager, roles: "Manager", menu: [...SELF_SERVICE, "Employees", "Organization", "Reports"] },
+  // X-M1: the Manager role holds team:read at REPORTING_TREE (beyond SELF), so People › Teams shows; the custom
+  // Team Lead and Recruiter roles plus self-service hold team:read at SELF only, so it stays hidden for them.
+  { who: "Sneha", email: NIMBUS.manager, roles: "Manager", menu: [...SELF_SERVICE, "Employees", "Organization", "Teams", "Reports"] },
   { who: "Karan", email: NIMBUS.payroll, roles: "Payroll Manager", menu: [...SELF_SERVICE, "Employees", "Organization", "Payroll", "Reports"] },
   {
     who: "Vikram", email: NIMBUS.hr, roles: "HR Administrator",
     // Email templates and branches only; for this role the branding page shows just its Email tab.
-    menu: [...SELF_SERVICE, "Employees", "Organization", "Face kiosk", "Reports", "Users", "Roles & access", "Audit log", "Branding & domains", "Legal entities & branches"],
+    menu: [...SELF_SERVICE, "Employees", "Organization", "Teams", "Face kiosk", "Reports", "Users", "Roles & access", "Audit log", "Branding & domains", "Legal entities & branches"],
   },
   {
     who: "Neha", email: NIMBUS.auditor, roles: "Auditor + Employee",
@@ -22,7 +24,7 @@ const PERSONAS: { who: string; email: string; roles: string; menu: string[] }[] 
   {
     who: "Ananya", email: NIMBUS.admin, roles: "Company Administrator",
     menu: [
-      ...SELF_SERVICE, "Employees", "Organization", "Payroll", "Face kiosk", "Reports", "Users", "Roles & access", "Audit log", "Company settings",
+      ...SELF_SERVICE, "Employees", "Organization", "Teams", "Payroll", "Face kiosk", "Reports", "Users", "Roles & access", "Audit log", "Company settings",
       "Branding & domains", "Legal entities & branches",
     ],
   },

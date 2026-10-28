@@ -41,9 +41,10 @@
     "**/*.tsx",
     ".next-e2e/types/**/*.ts",
     ".next-payroll/types/**/*.ts",
+    ".next-time/types/**/*.ts",
     ".next/types/**/*.ts",
     "next-env.d.ts",
-    ".next-time/types/**/*.ts"
+    ".next-build-tmp/types/**/*.ts"
   ],
   "exclude": [
     "node_modules",

@@ -27,6 +27,11 @@ test("X-M3 (a)-(c): audit paging, report year validation, the overtime pilot lis
 
   await test.step("(c) Karan shares a view of overtime.entries; Kavya opens it read-only; a row opens the Sheet", async () => {
     const karan = await openAs(browser, "alpha", "karan");
+    // Rerun-safe: an earlier run's view of the same name is Karan's own; delete it first.
+    const existing = await api(karan.page, "GET", "/saved-views?list_key=overtime.entries");
+    for (const v of existing.data.views.filter((x: any) => x.own && x.name === "Ravi's overtime")) {
+      expect((await api(karan.page, "DELETE", `/saved-views/${v.id}`)).status).toBe(204);
+    }
     await karan.page.goto("/overtime?tab=all");
     await karan.page.getByRole("searchbox", { name: "Search name or code" }).fill("Ravi");
     await expect(karan.page.getByTestId("result-count")).toHaveText(/^\d+ results?$/);
