@@ -3,15 +3,10 @@
 import { useMemo, useState } from "react";
 import {
   Check,
-  ChevronDown,
-  ChevronRight,
-  Filter,
-  MoreVertical,
   Search,
   Shield,
   ShieldAlert,
   ShieldCheck,
-  Trash2,
   UserCheck,
   UserMinus,
   UserPlus,
@@ -54,7 +49,6 @@ export function HierarchyTable({ nodes, canManage, onSelectEmployee, onRefresh }
   const [managerModalNode, setManagerModalNode] = useState<OrgNode | null>(null);
   const [reportsModalNode, setReportsModalNode] = useState<OrgNode | null>(null);
   const [bulkAssignManagerOpen, setBulkAssignManagerOpen] = useState(false);
-  const [bulkTargetManager, setBulkTargetManager] = useState<OrgNode | null>(null);
   const [bulkActionSaving, setBulkActionSaving] = useState(false);
 
   // Departments list for filter
