@@ -1,28 +1,42 @@
 "use client";
 
-import { CalendarClock, ChevronLeft, ChevronRight } from "lucide-react";
+import { ArrowLeftRight, CalendarClock, CheckCheck, ChevronLeft, ChevronRight } from "lucide-react";
 import { useMemo, useState } from "react";
+import toast from "react-hot-toast";
 
 import { useCan } from "@/components/access/Can";
+import { StayInSync } from "@/components/settings/StayInSync";
 import { WorkspaceHeader } from "@/components/payroll/inputs/shared";
+import { shiftsApi } from "@/components/shifts/api";
 import { addDays, todayIn } from "@/components/shifts/shiftModel";
 import { Button } from "@/components/ui/button";
-import { EmptyState, ErrorState } from "@/components/ui/layout";
+import { EmptyState, ErrorState, Tabs } from "@/components/ui/layout";
 import { Badge, Card, Skeleton } from "@/components/ui/primitives";
+import { toApiError } from "@/lib/api";
 import { fmtDate } from "@/lib/format";
 import { useApi } from "@/lib/hooks";
 import { cn } from "@/lib/cn";
+import { P } from "@/lib/permissions.generated";
+import { shiftRequestsApi } from "@/lib/shiftRequests";
+import { useTabParam } from "@/lib/useTabParam";
 
-import { rostersApi, type ScheduleDay } from "./api";
+import { rostersApi, type RosterEntry, type ScheduleDay } from "./api";
+import { ShiftRequestModal } from "./requests/ShiftRequestModal";
+import { AvailabilityPanel, MyShiftRequests, OpenShiftsBoard } from "./requests/ShiftRequestLists";
 import { dateLabel, isWeekend, scheduleText, scheduleTimes } from "./rosterModel";
 
 const RANGE_DAYS = 14;
 const SOURCE_TEXT: Record<string, string> = { ROSTER: "Roster", RULE: "Assignment rule", PLACEMENT: "Your usual shift" };
 
-function DayRow({ day, today, zone }: { day: ScheduleDay; today: string; zone: string }) {
+function DayRow({ day, today, zone, onRequest, onAcknowledge, pending }: {
+  day: ScheduleDay; today: string; zone: string; onRequest?: (entry: RosterEntry) => void;
+  onAcknowledge?: (entry: RosterEntry) => void; pending?: boolean;
+}) {
   const text = scheduleText(day);
   const times = day.kind === "OFF" ? null : scheduleTimes(day, zone);
   const kind = day.kind === "OFF" ? "off" : day.shift_id ? "work" : "none";
+  const entry = day.entries[0];
+  const future = day.date > today;
   return (
     <li data-testid={`schedule-day-${day.date}`} data-kind={kind}
       className={cn("flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-3 text-sm", isWeekend(day.date) && "bg-muted/30",
@@ -40,7 +54,24 @@ function DayRow({ day, today, zone }: { day: ScheduleDay; today: string; zone: s
       ) : (
         <span className={cn(kind === "off" ? "font-medium text-muted-foreground" : "text-muted-foreground/80")} data-testid="schedule-shift">{text}</span>
       )}
-      {day.source !== "NONE" && SOURCE_TEXT[day.source] && <span className="ms-auto text-xs text-muted-foreground">{SOURCE_TEXT[day.source]}</span>}
+      {pending && <Badge tone="info" data-testid="schedule-pending">Request pending — you are still scheduled</Badge>}
+      {entry && entry.source !== "ROTATION" && entry.source !== "MANUAL" && entry.source !== "COPY" && (
+        <Badge tone="neutral">{entry.source === "SWAP" ? "Swapped" : entry.source === "PICKUP" ? "Picked up" : entry.source === "DROP" ? "Given / taken" : entry.source === "CHANGE" ? "Changed" : entry.source.toLowerCase()}</Badge>
+      )}
+      <span className="ms-auto flex items-center gap-2">
+        {day.source !== "NONE" && SOURCE_TEXT[day.source] && <span className="text-xs text-muted-foreground">{SOURCE_TEXT[day.source]}</span>}
+        {entry && future && onAcknowledge && !entry.acknowledged_at && (
+          <Button size="sm" variant="ghost" data-testid={`schedule-ack-${day.date}`} onClick={() => onAcknowledge(entry)}>
+            <CheckCheck className="h-4 w-4" /> Acknowledge
+          </Button>
+        )}
+        {entry?.acknowledged_at && <span className="text-xs text-success" title={entry.acknowledged_at}>Seen</span>}
+        {entry && future && onRequest && !pending && (
+          <Button size="sm" variant="secondary" data-testid={`schedule-request-${day.date}`} onClick={() => onRequest(entry)}>
+            <ArrowLeftRight className="h-4 w-4" /> Request change
+          </Button>
+        )}
+      </span>
     </li>
   );
 }
@@ -49,9 +80,30 @@ function DayRow({ day, today, zone }: { day: ScheduleDay; today: string; zone: s
  * `/rosters/my-schedule` (§13 My schedule): the caller's days, two weeks at a time, from published roster entries,
  * then assignment rules and placements. Anchored shift times are converted to the work zone (`timesInZone`).
  */
+const TABS = ["schedule", "requests", "open", "availability"] as const;
+
 export function MySchedule() {
-  const { me } = useCan();
+  const { me, can } = useCan();
   const zone = me?.company?.timezone || "UTC";
+  const [tab, setTab] = useTabParam(TABS, "schedule");
+  const canRequest = can(P.ROSTER_REQUEST);
+  const [requesting, setRequesting] = useState<RosterEntry | null>(null);
+  const requests = useApi(() => (canRequest ? shiftRequestsApi.list("mine") : Promise.resolve({ items: [] })), [canRequest]);
+  const incoming = useApi(() => (canRequest ? shiftRequestsApi.list("incoming") : Promise.resolve({ items: [] })), [canRequest]);
+  const { data: shiftList } = useApi(() => shiftsApi.list({ limit: 100, status: "ACTIVE" })
+    .then((p) => p.items.map((s) => ({ id: s.id, code: s.code ?? s.name, name: s.name }))).catch(() => []), []);
+  const pendingEntries = useMemo(() => new Set((requests.data?.items ?? [])
+    .filter((r) => r.status === "PENDING_ACCEPTANCE" || r.status === "PENDING_APPROVAL").map((r) => r.entry?.id)), [requests.data]);
+  const waiting = (incoming.data?.items ?? []).filter((r) => r.status === "PENDING_ACCEPTANCE").length;
+  const acknowledge = async (entry: RosterEntry) => {
+    try {
+      await shiftRequestsApi.acknowledge(entry.id);
+      toast.success("Acknowledged");
+      void reload();
+    } catch (e) {
+      toast.error(toApiError(e).message);
+    }
+  };
   // null = the API default (the employee-local today and 13 days after it).
   const [from, setFrom] = useState<string | null>(null);
   const { data, error, loading, reload } = useApi(
@@ -79,7 +131,20 @@ export function MySchedule() {
             Next 2 weeks <ChevronRight className="h-4 w-4 rtl:-scale-x-100" aria-hidden />
           </Button>
         </>} />
-      {error ? (
+      {canRequest && (
+        <Tabs value={tab} onValueChange={(v) => setTab(v as (typeof TABS)[number])} tabs={[
+          { value: "schedule", label: "Schedule" },
+          { value: "requests", label: waiting ? `Requests (${waiting})` : "Requests" },
+          { value: "open", label: "Open shifts" },
+          { value: "availability", label: "Availability" },
+        ]}>
+          <span />
+        </Tabs>
+      )}
+      {tab === "requests" && canRequest ? <MyShiftRequests onChanged={() => { void requests.reload(); void incoming.reload(); void reload(); }} />
+        : tab === "open" && canRequest ? <OpenShiftsBoard />
+        : tab === "availability" && canRequest ? <AvailabilityPanel />
+        : error ? (
         error.status === 404
           ? <Card><EmptyState icon={<CalendarClock />} title="No employee profile" description="Your sign-in isn't linked to an employee, so there is no schedule to show." /></Card>
           : <ErrorState message={error.message} onRetry={reload} />
@@ -93,12 +158,18 @@ export function MySchedule() {
                 Week of {fmtDate(week[0].date)}
               </h2>
               <ul className="divide-y divide-border">
-                {week.map((day) => <DayRow key={day.date} day={day} today={today} zone={zone} />)}
+                {week.map((day) => <DayRow key={day.date} day={day} today={today} zone={zone}
+                  onRequest={canRequest ? setRequesting : undefined} onAcknowledge={(e) => void acknowledge(e)}
+                  pending={!!day.entries[0] && pendingEntries.has(day.entries[0].id)} />)}
               </ul>
             </Card>
           ))}
+          {/* G-24: the published schedule in the person's own calendar, and browser notifications. */}
+          <StayInSync />
         </div>
       )}
+      <ShiftRequestModal entry={requesting} shifts={shiftList ?? []} onClose={() => setRequesting(null)}
+        onDone={() => { setRequesting(null); void requests.reload(); void reload(); }} />
     </div>
   );
 }

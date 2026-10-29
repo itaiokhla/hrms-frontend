@@ -55,6 +55,16 @@ export interface AttendanceDay {
   evaluated_at: string;
   trigger: string;
   history?: { version: number; trigger: string; created_at: string; changed: string[] }[];
+  /** Computed server-side, never stored (04-attendance/03 §11). */
+  day_label?: DayLabel;
+}
+
+/** The computed day label (04-attendance/03 §11): label, the other half's reason, strip code and badges. */
+export interface DayLabel {
+  label: string;
+  detail: string | null;
+  code: string | null;
+  badges: ("Late" | "Early" | "Short" | "OT" | "Excused" | "Evidence")[];
 }
 
 export interface DayExplain {
@@ -97,6 +107,7 @@ export interface ExceptionItem {
   late_minutes: number | null;
   early_minutes: number | null;
   net_minutes: number | null;
+  day_label?: DayLabel;
 }
 
 export interface ExceptionQuery {
@@ -181,6 +192,20 @@ export interface RulesFields {
   short_tolerance_minutes: number;
   break_attestation: boolean;
   ot_post_shift_buffer_minutes: number;
+  break_defaults: BreakDefault[];
+}
+
+/** A BreakRule of custom-time roster entries without a shift (03-shifts/01 §5.1, §5.4). */
+export interface BreakDefault {
+  kind: "LUNCH" | "REST" | "PERSONAL" | "OTHER";
+  mode: "PUNCHED" | "FIXED_WINDOW" | "FLOATING_WINDOW" | "AUTO_DEDUCT";
+  minutes: number;
+  paid: boolean;
+  start?: string;
+  end?: string;
+  window_start?: string;
+  window_end?: string;
+  auto_deduct_after_minutes?: number;
 }
 
 export interface PolicySummary {

@@ -2,6 +2,7 @@
 
 import { Coffee, Lock, LogIn, LogOut, MapPin, PenLine, ShieldAlert, Utensils } from "lucide-react";
 
+import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/layout";
 import { Sheet } from "@/components/ui/overlay";
 import { Badge, Skeleton, StatusBadge } from "@/components/ui/primitives";
@@ -43,10 +44,12 @@ const SAMPLE_STATUS: Record<string, string> = {
   MISSED: "Missed (page closed or asleep)",
 };
 
-export function SessionDrawer({ attendanceId, canLocate, onClose }: {
+export function SessionDrawer({ attendanceId, canLocate, onClose, onRequestCorrection }: {
   attendanceId: number | null;
   canLocate: boolean;
   onClose: () => void;
+  /** AS-M4 (v2): opens the att-regularize Modal pre-filled with this session's date and id. */
+  onRequestCorrection?: (date: string, sessionId: number, missingOut: boolean) => void;
 }) {
   const { data, loading, error } = useApi(
     () => api.get<SessionDetail>(`/attendance/sessions/${attendanceId}`, { params: { include_locations: canLocate } }),
@@ -55,7 +58,13 @@ export function SessionDrawer({ attendanceId, canLocate, onClose }: {
   );
   return (
     <Sheet open={attendanceId !== null} onOpenChange={(open) => !open && onClose()}
-      title={data?.employee_name ?? "Attendance"} description={data ? fmtDate(data.date, "EEEE, d MMMM yyyy") : undefined}>
+      title={data?.employee_name ?? "Attendance"} description={data ? fmtDate(data.date, "EEEE, d MMMM yyyy") : undefined}
+      footer={data && onRequestCorrection ? (
+        <Button variant="subtle" data-testid="drawer-request-correction"
+          onClick={() => onRequestCorrection(data.date, data.id, !data.check_out_time)}>
+          <PenLine className="h-4 w-4" /> Request a correction
+        </Button>
+      ) : undefined}>
       {loading || !data ? (
         error ? <EmptyState title="Couldn't load this shift" description={error.message} /> : <Skeleton className="h-96" />
       ) : (

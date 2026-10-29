@@ -24,7 +24,7 @@ export interface ApiErrorBody {
   code?: string;
   // Structured extras beside detail and code (LH-M0 WI-0.4; server EXTRA_KEYS).
   issues?: ApiIssue[];
-  details?: Record<string, unknown>;
+  details?: unknown;
   allowed_actions?: string[];
 }
 
@@ -32,12 +32,16 @@ export class ApiError extends Error {
   status: number;
   code?: string;
   fields?: { field: string; msg: string }[];
+  /** Structured extras of the error body (server EXTRA_KEYS ``details``), e.g. limit usage or the open days. */
+  details?: unknown;
 
-  constructor(status: number, message: string, code?: string, fields?: { field: string; msg: string }[]) {
+  constructor(status: number, message: string, code?: string, fields?: { field: string; msg: string }[],
+    details?: unknown) {
     super(message);
     this.status = status;
     this.code = code;
     this.fields = fields;
+    this.details = details;
   }
 }
 
@@ -149,7 +153,7 @@ export function toApiError(error: unknown): ApiError {
       : detail && typeof detail === "object" && typeof (detail as { message?: unknown }).message === "string"
         ? (detail as { message: string }).message
         : "";
-  return new ApiError(status, message || fallback, data?.code);
+  return new ApiError(status, message || fallback, data?.code, undefined, data?.details);
 }
 
 export const api = {

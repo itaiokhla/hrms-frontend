@@ -47,7 +47,11 @@ export function ExceptionsView() {
           {row.employee_name}
         </Link>) },
     { key: "date", header: "Date", cell: (row) => fmtDate(row.shift_date) },
-    { key: "result", header: "Day", cell: (row) => <Badge tone={RESULT_TONES[row.day_result] ?? "neutral"}>{label(row.day_result)}</Badge> },
+    { key: "result", header: "Day", cell: (row) => (
+        <span className="inline-flex flex-wrap items-center gap-1">
+          <Badge tone={RESULT_TONES[row.day_result] ?? "neutral"}>{row.day_label?.label ?? label(row.day_result)}</Badge>
+          {row.day_label?.detail && <span className="text-xs text-muted-foreground">{row.day_label.detail}</span>}
+        </span>) },
     { key: "codes", header: "Exceptions",
       cell: (row) => (
         <div className="flex flex-wrap gap-1">

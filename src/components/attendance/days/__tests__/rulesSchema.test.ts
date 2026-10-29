@@ -25,6 +25,27 @@ describe("rules editor schema", () => {
     expect(paths).toEqual(expect.arrayContaining(["half_day_min_minutes", "late_half_day_after_minutes"]));
   });
 
+  it("sends default breaks with only the fields their mode uses", () => {
+    const fields = toFields(rulesSchema.parse({ ...base, break_defaults: [
+      { kind: "LUNCH", mode: "AUTO_DEDUCT", minutes: "30", paid: false, start: "", end: "", after: "300" },
+      { kind: "REST", mode: "FIXED_WINDOW", minutes: "15", paid: true, start: "10:30", end: "10:45", after: "" },
+    ] }));
+    expect(fields.break_defaults).toEqual([
+      { kind: "LUNCH", mode: "AUTO_DEDUCT", minutes: 30, paid: false, auto_deduct_after_minutes: 300 },
+      { kind: "REST", mode: "FIXED_WINDOW", minutes: 15, paid: true, start: "10:30", end: "10:45" },
+    ]);
+    expect(toFields(rulesSchema.parse(base)).break_defaults).toEqual([]);
+  });
+
+  it("refuses a deduct without its threshold and a fixed window of the wrong length", () => {
+    const result = rulesSchema.safeParse({ ...base, break_defaults: [
+      { kind: "LUNCH", mode: "AUTO_DEDUCT", minutes: "30", paid: false, start: "", end: "", after: "" },
+      { kind: "LUNCH", mode: "FIXED_WINDOW", minutes: "60", paid: false, start: "13:00", end: "13:30", after: "" },
+    ] });
+    const paths = result.success ? [] : result.error.issues.map((i) => i.path.join("."));
+    expect(paths).toEqual(expect.arrayContaining(["break_defaults.0.after", "break_defaults.1.end"]));
+  });
+
   it("treats an empty grace as the setting (null)", () => {
     expect(toFields(rulesSchema.parse({ ...base, grace_in_minutes: "", late_half_day_after_minutes: "" })).grace_in_minutes).toBeNull();
   });

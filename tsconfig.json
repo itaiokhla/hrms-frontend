@@ -39,15 +39,17 @@
   "include": [
     "**/*.ts",
     "**/*.tsx",
-    ".next-e2e/types/**/*.ts",
-    ".next-payroll/types/**/*.ts",
-    ".next-time/types/**/*.ts",
     ".next/types/**/*.ts",
     "next-env.d.ts",
     ".next-build-tmp/types/**/*.ts"
   ],
   "exclude": [
     "node_modules",
+    ".next-e2e",
+    ".next-payroll",
+    ".next-time",
+    ".next-build-tmp",
+    ".next-org-build",
     "e2e",
     "e2e-gps",
     "playwright.config.ts",

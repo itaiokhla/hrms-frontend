@@ -7,6 +7,7 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { DAY_CLASSES, DayLedgerCalendar, type LedgerDay } from "@/components/payroll/DayLedgerCalendar";
 import { ExplainPanel, type ExplainInput, type ExplainSource } from "@/components/payroll/ExplainPanel";
 import { MoneyText } from "@/components/payroll/MoneyText";
+import { RetroBreakdown } from "@/components/payroll/RetroBreakdown";
 import { useModalRoute } from "@/components/payroll/useModalRoute";
 import { Button } from "@/components/ui/button";
 import { ErrorState } from "@/components/ui/layout";
@@ -186,6 +187,7 @@ export function EmployeeInRunView({ runEmployeeId, inSheet, onLoaded }: { runEmp
       )}
       <Lines d={d} />
       <Attendance d={d} />
+      <RetroBreakdown runEmployeeId={d.id} />
       {d.exceptions.length > 0 && (
         <section aria-label="Findings">
           <h3 className="mb-2 text-sm font-semibold">Findings</h3>

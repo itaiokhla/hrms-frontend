@@ -132,17 +132,16 @@ export function AppShell({ children }: { children: ReactNode }) {
           </div>
         )}
         <main className="mx-auto w-full max-w-[1400px] flex-1 px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={pathname}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -6 }}
-              transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
-            >
-              {children}
-            </motion.div>
-          </AnimatePresence>
+          {/* Enter animation only: an exit (AnimatePresence) keeps the outgoing wrapper alive, and the App Router
+              already renders the new page inside it, so every page mounted twice (double fetches, typed input lost). */}
+          <motion.div
+            key={pathname}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+          >
+            {children}
+          </motion.div>
         </main>
       </div>
     </div>

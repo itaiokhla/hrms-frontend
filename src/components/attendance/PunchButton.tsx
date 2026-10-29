@@ -19,11 +19,13 @@ import { cn } from "@/lib/cn";
 import { fmtDate, fmtTime } from "@/lib/format";
 import { captureLocation, explainAttempt, type LocationAttempt } from "@/lib/geolocation";
 import { useApi } from "@/lib/hooks";
+import { enqueue, recordServerTime } from "@/lib/offlineQueue";
 import { newIdempotencyKey } from "@/lib/payroll/api";
 import type { MyAttendance } from "@/lib/types";
 import { useSession } from "@/store/session";
 
 import { CaptureApiError, captureApi, type CaptureView, type LocationCheck, type PunchMeta, type PunchResult } from "./captureApi";
+import { OfflineQueueCard } from "./OfflineQueueCard";
 import {
   BAND_LABEL, DIRECTION_DONE, DIRECTION_LABEL, FLAG_LABEL, GEOFENCE_LABEL, LOCATION_LABEL, RESULT_LABEL, directionsFor,
   geofenceText, resultTone, type Direction,
@@ -66,6 +68,7 @@ export function PunchScreen() {
   const today = useApi(() => captureApi.myToday(), []);
   const [dialog, setDialog] = useState<Direction | null>(null);
   const [receipt, setReceipt] = useState<PunchResult | null>(null);
+  useEffect(() => { recordServerTime(today.data?.server_now); }, [today.data?.server_now]);
 
   if (capture.error || today.error) {
     const error = capture.error ?? today.error;
@@ -141,6 +144,9 @@ export function PunchScreen() {
         <AnimatePresence>
           {receipt && <Receipt key={receipt.punch_id ?? "receipt"} result={receipt} />}
         </AnimatePresence>
+
+        <OfflineQueueCard enabled={policy.offline_punches === "ALLOW"}
+          onSynced={() => { void today.reload(); void capture.reload(); }} />
 
         <ChecksCard capture={policy} />
 
@@ -278,7 +284,9 @@ function PunchDialog({ direction, capture, today, source, companyName, onClose, 
   const mode = locationModeOf(capture, direction);
   const face = faceWanted(capture, direction) && capture.face_step === "REQUIRED";
   const faceSkipped = faceWanted(capture, direction) && capture.face_step === "SKIPPED";
-  const needsNotice = mode !== "OFF" && capture.consents_needed.some((c) => c.purpose === "LOCATION_AT_PUNCH");
+  // Periodic location during the shift has its own notice (07 L-2): shown at check in while tracking is on.
+  const tracking = direction === "IN" && !!capture.tracking?.enabled;
+  const needsNotice = (mode !== "OFF" && capture.consents_needed.some((c) => c.purpose === "LOCATION_AT_PUNCH")) || tracking;
   const qrRequired = capture.qr_mode === "REQUIRED";
   const onBreak = direction === "OUT" && today.attendance_state === "ON_LUNCH";
   const intent = useMemo(() => newIdempotencyKey(), []); // one key per intent: retries reuse it (P-1)
@@ -359,7 +367,7 @@ function PunchDialog({ direction, capture, today, source, companyName, onClose, 
         const allowed = Boolean(d.reason_allowed);
         setBlocked({ message, reasonAllowed: allowed, check });
         if (allowed) setAskReason(true);
-      } else if (code === "CONSENT_REQUIRED") {
+      } else if (code === "CONSENT_REQUIRED" || code === "LOCATION_NOTICE_REQUIRED") {
         setNoticeForced(true);
         setError("Please read the notice and tick “I understand” to continue.");
       } else if (code === "LOCATION_STALE") {
@@ -367,6 +375,13 @@ function PunchDialog({ direction, capture, today, source, companyName, onClose, 
         await locate();
       } else if (code === "QR_INVALID") {
         setError(message);
+      } else if (status === 0 && capture.offline_punches === "ALLOW") {
+        // O-2: keep the punch on this phone (no photo, face or QR is queued) and sync it when the network is back.
+        enqueue({ idempotency_key: intent, direction, capture_source: source,
+          location: mode !== "OFF" && attempt ? (attempt as unknown as Record<string, unknown>) : null,
+          location_consent: true, exception_reason: reasonOffered && reasonOk ? reason.trim() : null });
+        toast.success(`${DIRECTION_LABEL[direction]} saved on this phone — it syncs when you're back online.`);
+        onClose();
       } else if (status === 0) {
         setError("You're offline. Reconnect and press the button again — nothing is recorded twice.");
       } else if (status === 409 && !["LUNCH_OPEN_CONFIRM", "LUNCH_OPEN"].includes(code ?? "")) {
@@ -461,10 +476,16 @@ function PunchDialog({ direction, capture, today, source, companyName, onClose, 
         {showNotice && (
           <div className="rounded-xl bg-muted p-3 text-xs leading-relaxed" data-testid="punch-location-notice">
             <p className="mb-1 flex items-center gap-1.5 font-semibold"><ShieldCheck className="h-4 w-4" aria-hidden /> Location notice</p>
-            {companyName} records your phone or browser&apos;s location when you check in and out
-            {capture.location_on_breaks !== "OFF" ? " and at breaks" : ""}, to confirm you are at your site. It is kept
-            for a limited time (see your privacy page). Your manager sees only whether you were at your site, never the
-            exact place.
+            {mode !== "OFF" && <>
+              {companyName} records your phone or browser&apos;s location when you check in and out
+              {capture.location_on_breaks !== "OFF" ? " and at breaks" : ""}, to confirm you are at your site.{" "}
+            </>}
+            {tracking && <>
+              While you are checked in, your location is also checked about every {capture.tracking?.interval_minutes} minutes
+              {capture.tracking?.pause_on_break ? " (not during breaks)" : ""}, and never outside work.{" "}
+            </>}
+            It is kept for a limited time (see your privacy page). Your manager sees only whether you were at your site,
+            never the exact place.
             <label className="mt-2 flex items-center gap-2 font-medium">
               <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} data-testid="punch-location-consent" />
               I understand

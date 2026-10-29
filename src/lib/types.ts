@@ -220,13 +220,33 @@ export interface ShiftRule {
 
 export interface OrgNode {
   id: number;
+  employee_code?: string;
   full_name: string;
+  email?: string;
   position: string | null;
+  department_id?: number | null;
   department: string | null;
   location: string | null;
   manager_id: number | null;
+  manager_name?: string | null;
   report_count: number;
   has_photo: boolean;
+  children_ids?: number[];
+  level?: number;
+  security_level?: string;
+  security_tier?: number;
+  role_name?: string;
+  teams?: string[];
+  can_manage?: boolean;
+}
+
+export interface OrgHierarchy {
+  nodes: OrgNode[];
+  roots: number[];
+  departments: { id: number; name: string; count: number }[];
+  teams: { id: number; name: string; code: string; count: number }[];
+  summary: { total_employees: number; total_managers: number; max_depth: number };
+  can_manage: boolean;
 }
 
 export interface Delegation {

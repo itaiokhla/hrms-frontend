@@ -15,6 +15,8 @@ const PUBLIC = [
   // Public document verification printed on payslips (EC-DOC-18): no session needed.
   "/verify",
   "/manifest.webmanifest",
+  // The service worker script (offline punch, push) must load without a session redirect.
+  "/sw.js",
 ];
 const PLATFORM_HOSTS = (process.env.PLATFORM_HOSTS || "localhost,127.0.0.1")
   .split(",")

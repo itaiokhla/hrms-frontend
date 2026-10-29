@@ -1,12 +1,13 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { ChevronRight, Network, Plus, Trash2 } from "lucide-react";
-import { useSearchParams } from "next/navigation";
+import { ChevronRight, Network, Plus, Trash2, UsersRound } from "lucide-react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 import toast from "react-hot-toast";
 
 import { RequireAccess, useCan } from "@/components/access/Can";
+import { OrgHierarchyView } from "@/components/organization/OrgHierarchy";
 import { EmployeePicker, type PickedEmployee } from "@/components/shared/EmployeePicker";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Select } from "@/components/ui/field";
@@ -18,9 +19,10 @@ import { can, canBeyondSelf, companyWide } from "@/lib/access";
 import { fmtDate, titleCase, todayISO } from "@/lib/format";
 import { useApi, useDebounced } from "@/lib/hooks";
 import { P } from "@/lib/permissions.generated";
-import type { Delegation, OrgNode, SecondaryLine } from "@/lib/types";
+import type { Delegation, Department, OrgNode, SecondaryLine } from "@/lib/types";
 
 import { EmployeeDrawer } from "../employees/EmployeeDrawer";
+import { EmployeeForm } from "../employees/EmployeeForm";
 
 export default function OrganizationPage() {
   return (
@@ -34,10 +36,16 @@ export default function OrganizationPage() {
 
 function Organization() {
   const params = useSearchParams();
-  const { me } = useCan();
+  const router = useRouter();
+  const { me, can: allowed } = useCan();
   const [tab, setTab] = useState(params.get("tab") ?? "chart");
   const [selected, setSelected] = useState<number | null>(null);
   const [version, setVersion] = useState(0);
+  const [addOpen, setAddOpen] = useState(false);
+  const [initialManager, setInitialManager] = useState<PickedEmployee | null>(null);
+  const { data: departments } = useApi(() => api.get<Department[]>("/departments"), [], {
+    enabled: allowed(P.EMPLOYEE_CREATE),
+  });
 
   const tabs = [
     { value: "chart", label: "Org chart" },
@@ -49,11 +57,29 @@ function Organization() {
     <div>
       <PageHeader
         title="Organization"
-        description="Primary reporting lines build the tree. Functional, project and dotted-line managers, and delegated approvers, are tracked separately."
+        description="Explore reporting lines, security responsibility and team membership without exposing anyone above your permitted scope."
+        actions={
+          <>
+            {allowed(P.TEAM_READ) && (
+              <Button variant="secondary" onClick={() => router.push("/teams")}>
+                <UsersRound className="h-4 w-4" /> Manage teams
+              </Button>
+            )}
+            {allowed(P.EMPLOYEE_CREATE) && (
+              <Button onClick={() => { setInitialManager(null); setAddOpen(true); }}>
+                <Plus className="h-4 w-4" /> Add employee
+              </Button>
+            )}
+          </>
+        }
       />
       <Tabs tabs={tabs} value={tab} onValueChange={setTab}>
         <TabPanel value="chart">
-          <OrgChart key={version} onSelect={setSelected} />
+          <OrgHierarchyView
+            version={version}
+            onSelect={setSelected}
+            onAddEmployee={(manager) => { setInitialManager(manager); setAddOpen(true); }}
+          />
         </TabPanel>
         <TabPanel value="secondary">
           <SecondaryLines />
@@ -66,6 +92,19 @@ function Organization() {
       </Tabs>
       <EmployeeDrawer employeeId={selected} onClose={() => setSelected(null)} onEdit={() => undefined}
         onChanged={() => setVersion((v) => v + 1)} />
+      <EmployeeForm
+        open={addOpen}
+        onOpenChange={setAddOpen}
+        employee={null}
+        departments={departments ?? []}
+        initialManager={initialManager}
+        onSaved={(employee) => {
+          setAddOpen(false);
+          setInitialManager(null);
+          setVersion((value) => value + 1);
+          setSelected(employee.id);
+        }}
+      />
     </div>
   );
 }
@@ -161,6 +200,10 @@ function TreeNode({ node, depth, onSelect, flat }: { node: OrgNode; depth: numbe
     </li>
   );
 }
+
+// Kept temporarily as a compatibility renderer for older embedded callers;
+// the page itself uses the richer OrgHierarchyView above.
+void OrgChart;
 
 /* --------------------------------------------------------- Secondary lines */
 function SecondaryLines() {

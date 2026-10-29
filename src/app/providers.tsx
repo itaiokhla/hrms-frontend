@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import { Toaster } from "react-hot-toast";
 
 import { BrandProvider } from "@/components/brand/BrandProvider";
+import { ServiceWorkerRegistrar } from "@/components/layout/ServiceWorker";
 import { ConfirmProvider } from "@/components/ui/overlay";
 import type { Brand } from "@/lib/brand";
 
@@ -13,6 +14,7 @@ export function Providers({ children, brand }: { children: ReactNode; brand: Bra
     <BrandProvider brand={brand}>
       <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
         <ConfirmProvider>{children}</ConfirmProvider>
+        <ServiceWorkerRegistrar />
         {/* Modal dialogs aria-hide the rest of the page but keep [aria-live] elements, so this
             persistent live region keeps toasts announced while a dialog or drawer is open. */}
         <div aria-live="polite">

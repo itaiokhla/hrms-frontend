@@ -125,8 +125,11 @@ test("(d) Kavya drafts standard attendance rules and previews their impact (no a
   await page.goto("/settings/attendance/overview");
   await page.getByRole("link", { name: "Attendance rules" }).click();
   const editor = page.getByTestId("attendance-rules-editor");
-  await expect(editor).toBeVisible();
-  await editor.getByLabel("Name", { exact: true }).fill(`G-07 preview ${Date.now()}`);
+  // The policy list loads on the client: once it shows (a) 's LEGACY_V1 policy the form is hydrated, so typed values
+  // are not replaced by the registered defaults.
+  await expect(editor.getByTestId("rules-policies")).toContainText("current behaviour");
+  const name = `G-07 preview ${Date.now()}`;
+  await editor.getByLabel("Name", { exact: true }).fill(name);
   await editor.getByLabel("Effective from", { exact: true }).fill(localDay(-14));
   await editor.getByLabel("Thresholds", { exact: true }).selectOption("ABSOLUTE");
   await editor.getByLabel("Full day (minutes)", { exact: true }).fill("450");
@@ -136,6 +139,8 @@ test("(d) Kavya drafts standard attendance rules and previews their impact (no a
   await expect(preview).toBeVisible({ timeout: 120_000 });
   await expect(preview).toContainText(/covers \d+ people/);
   await expect(preview.getByRole("button", { name: "Activate" })).toBeVisible();
+  await expect(editor.getByTestId("rules-policies")).toContainText(name);
+  await preview.scrollIntoViewIfNeeded();
   await shot(page, testInfo, "07d-rules-preview");
 });
 

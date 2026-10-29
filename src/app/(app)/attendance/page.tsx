@@ -1,13 +1,20 @@
 "use client";
 
-import { Clock3, Coffee, PenLine, Timer, UserCheck, Users, UserX } from "lucide-react";
-import { useState } from "react";
+import { Clock3, Coffee, PenLine, Timer, Trash2, UserCheck, Users, UserX } from "lucide-react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useState } from "react";
+
+import { LiveBoard } from "@/components/attendance/live/LiveBoard";
 import toast from "react-hot-toast";
 
 import { RequireAccess, useCan } from "@/components/access/Can";
 import { LocationReviewPanel } from "@/components/attendance/LocationReviewPanel";
 import { MyAttendanceCard } from "@/components/attendance/MyAttendanceCard";
 import { MyDayEvaluation } from "@/components/attendance/days/MyDayEvaluation";
+import { MyRequests } from "@/components/attendance/requests/MyRequests";
+import { RegularizeModal, type RegularizeInitial } from "@/components/attendance/requests/RegularizeModal";
+import { TeamBoard } from "@/components/attendance/team/TeamBoard";
+import { teamApi } from "@/lib/teamAttendance";
 import { SessionDrawer } from "@/components/attendance/SessionDrawer";
 import { EmployeePicker, type PickedEmployee } from "@/components/shared/EmployeePicker";
 import { Button } from "@/components/ui/button";
@@ -27,7 +34,9 @@ const PAGE_SIZES = [25, 50];
 export default function AttendancePage() {
   return (
     <RequireAccess check={(me) => canAny(me, [P.ATTENDANCE_MARK, P.ATTENDANCE_READ])}>
-      <Attendance />
+      <Suspense fallback={<Skeleton className="h-64" />}>
+        <Attendance />
+      </Suspense>
     </RequireAccess>
   );
 }
@@ -36,8 +45,20 @@ function Attendance() {
   const { me } = useCan();
   const mine = can(me, P.ATTENDANCE_MARK) && !!me?.employee;
   const team = canBeyondSelf(me, P.ATTENDANCE_READ);
-  const [tab, setTab] = useState(mine ? "me" : "team");
-  const tabs = [...(mine ? [{ value: "me", label: "My attendance" }] : []), ...(team ? [{ value: "team", label: "Team" }] : [])];
+  // AS-M9 (G-20): the live board is a v2 view for readers beyond SELF (`/attendance?tab=live`).
+  const live = team && !!me?.attendance?.v2;
+  const tabs = [...(mine ? [{ value: "me", label: "My attendance" }] : []), ...(team ? [{ value: "team", label: "Team" }] : []),
+    ...(live ? [{ value: "live", label: "Live" }] : [])];
+  const params = useSearchParams();
+  const router = useRouter();
+  const requested = params.get("tab");
+  const [tab, setTabState] = useState(tabs.some((t) => t.value === requested) ? (requested as string) : mine ? "me" : "team");
+  const setTab = (value: string) => {
+    setTabState(value);
+    const next = new URLSearchParams(params.toString());
+    next.set("tab", value);
+    router.replace(`/attendance?${next.toString()}`, { scroll: false });
+  };
   return (
     <div>
       <PageHeader title="Attendance" description="Punch in and out, take lunch, and follow your team's day in real time." />
@@ -45,6 +66,7 @@ function Attendance() {
         <Tabs tabs={tabs} value={tab} onValueChange={setTab}>
           <TabPanel value="me"><MyAttendance /></TabPanel>
           <TabPanel value="team"><TeamAttendance /></TabPanel>
+          {live && <TabPanel value="live"><LiveBoard /></TabPanel>}
         </Tabs>
       ) : mine ? <MyAttendance /> : <TeamAttendance />}
     </div>
@@ -71,6 +93,14 @@ function MyAttendance() {
   const { data: today, setData, reload } = useApi(() => api.get<MyAttendance>("/attendance/me/today"), []);
   const { data: history, reload: reloadHistory } = useApi(() => api.get<Page<AttendanceRecord>>("/attendance/me/history"), []);
   const [open, setOpen] = useState<number | null>(null);
+  // AS-M4 (V2 gate): self-service correction requests from the history table and the session drawer.
+  const requests = !!me?.attendance?.v2 && can(me, P.ATTENDANCE_REQUEST);
+  const [regularize, setRegularize] = useState<RegularizeInitial | null>(null);
+  const [requestsKey, setRequestsKey] = useState(0);
+  const openCorrection = (date: string, sessionId: number | null, missingOut: boolean) => {
+    setOpen(null);
+    setRegularize({ date, sessionId, kind: missingOut ? "MISSED_PUNCH" : "CORRECTION", direction: "OUT" });
+  };
 
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,420px)_1fr]">
@@ -91,10 +121,22 @@ function MyAttendance() {
             { key: "lunch", header: "Lunch", cell: (r) => fmtHours(r.hours.lunch_seconds), hideOnMobile: true },
             { key: "net", header: "Worked", cell: (r) => <NetHours record={r} /> },
             { key: "status", header: "Status", cell: (r) => <StatusBadge status={r.status} /> },
+            ...(requests ? [{ key: "fix", header: "", cell: (r: AttendanceRecord) => (
+              <Button size="sm" variant="ghost" data-testid={`history-fix-${r.date}`}
+                onClick={(e) => { e.stopPropagation(); openCorrection(r.date, r.id, !r.check_out_time); }}>
+                <PenLine className="h-3.5 w-3.5" /> Fix
+              </Button>
+            ) }] : []),
           ]}
         />
       </Card>
-      <SessionDrawer attendanceId={open} canLocate={can(me, P.LOCATION_READ)} onClose={() => setOpen(null)} />
+      {requests && <MyRequests refreshKey={requestsKey} onNew={() => setRegularize({ kind: "MISSED_PUNCH", direction: "OUT" })} />}
+      <SessionDrawer attendanceId={open} canLocate={can(me, P.LOCATION_READ)} onClose={() => setOpen(null)}
+        onRequestCorrection={requests ? openCorrection : undefined} />
+      {requests && (
+        <RegularizeModal open={regularize !== null} onOpenChange={(o) => !o && setRegularize(null)} initial={regularize ?? undefined}
+          onSaved={() => { setRequestsKey((k) => k + 1); void reloadHistory(); }} />
+      )}
     </div>
   );
 }
@@ -119,6 +161,16 @@ function TeamAttendance() {
   };
   const [manualOpen, setManualOpen] = useState(false);
   const [open, setOpen] = useState<number | null>(null);
+  // AS-M4: on v2 tenants HR corrections go through requests (DIRECT, with a reason) or on behalf (approval).
+  const v2Modes = [
+    ...(can(me, P.ATTENDANCE_REGULARIZE) ? ["DIRECT" as const] : []),
+    ...(can(me, P.ATTENDANCE_REQUEST_ON_BEHALF) ? ["ON_BEHALF" as const] : []),
+  ];
+  const [correcting, setCorrecting] = useState(false);
+  // Team management (IG-AS-98..100): edit (v2 direct correction / v1 manual entry) and delete (void) team sessions.
+  const canEdit = can(me, P.ATTENDANCE_REGULARIZE);
+  const [editing, setEditing] = useState<AttendanceRecord | null>(null);
+  const [deleting, setDeleting] = useState<AttendanceRecord | null>(null);
 
   return (
     <div className="space-y-6">
@@ -133,12 +185,18 @@ function TeamAttendance() {
           <StatCard label="Not checked in" value={summary.absent_today} icon={<UserX />} tone="warning" hint={`${summary.on_leave} on leave`} delay={0.2} />
         </div>
       )}
+      {(can(me, P.ATTENDANCE_PROXY_PUNCH) || canBeyondSelf(me, P.ATTENDANCE_READ)) && (
+        <TeamBoard onChanged={() => { void reload(); void reloadRecords(); }} />
+      )}
       {can(me, P.LOCATION_REVIEW) && <LocationReviewPanel onOpenSession={setOpen} />}
       <Card>
         <div className="flex flex-col gap-3 border-b border-border p-4 sm:flex-row sm:items-end">
           <Field label="From" className="sm:w-44"><Input type="date" value={start} onChange={(e) => setRange(e.target.value, end)} /></Field>
           <Field label="To" className="sm:w-44"><Input type="date" value={end} onChange={(e) => setRange(start, e.target.value)} /></Field>
           <div className="flex-1" />
+          {me?.attendance?.v2 && v2Modes.length > 0 && (
+            <Button variant="subtle" data-testid="team-correct" onClick={() => setCorrecting(true)}><PenLine className="h-4 w-4" /> Correct attendance</Button>
+          )}
           {can(me, P.ATTENDANCE_REGULARIZE) && (
             <Button variant="secondary" onClick={() => setManualOpen(true)}><PenLine className="h-4 w-4" /> Record manually</Button>
           )}
@@ -164,6 +222,14 @@ function TeamAttendance() {
             { key: "net", header: "Net", cell: (r) => <NetHours record={r} /> },
             { key: "loc", header: "Location", hideOnMobile: true, cell: (r) => <LocationCell record={r} /> },
             { key: "status", header: "Status", cell: (r) => <StatusBadge status={r.status} /> },
+            ...(canEdit ? [{ key: "actions", header: "", cell: (r: AttendanceRecord) => (
+              <span className="flex justify-end gap-1">
+                <Button size="sm" variant="ghost" aria-label={`Edit attendance of ${r.employee_name}`} data-testid={`row-edit-${r.id}`}
+                  onClick={(e) => { e.stopPropagation(); setEditing(r); }}><PenLine className="h-3.5 w-3.5" /></Button>
+                <Button size="sm" variant="danger-ghost" aria-label={`Delete attendance of ${r.employee_name}`} data-testid={`row-delete-${r.id}`}
+                  onClick={(e) => { e.stopPropagation(); setDeleting(r); }}><Trash2 className="h-3.5 w-3.5" /></Button>
+              </span>
+            ) }] : []),
           ]}
         />
         {records && (
@@ -174,6 +240,23 @@ function TeamAttendance() {
         )}
       </Card>
       <ManualEntry open={manualOpen} onOpenChange={setManualOpen} onSaved={() => { void reload(); void reloadRecords(); }} />
+      {!me?.attendance?.v2 && (
+        <ManualEntry key={editing?.id ?? "none"} open={editing !== null} onOpenChange={(o) => !o && setEditing(null)} initial={editing}
+          onSaved={() => { setEditing(null); void reload(); void reloadRecords(); }} />
+      )}
+      {me?.attendance?.v2 && canEdit && (
+        <RegularizeModal open={editing !== null} onOpenChange={(o) => !o && setEditing(null)} allowedModes={["DIRECT"]}
+          initial={editing ? { mode: "DIRECT", kind: editing.check_out_time ? "CORRECTION" : "MISSED_PUNCH", direction: "OUT",
+            date: editing.date, sessionId: editing.id, employee: { id: editing.employee_id, full_name: editing.employee_name ?? "" } } : undefined}
+          onSaved={() => { setEditing(null); void reload(); void reloadRecords(); }} />
+      )}
+      <DeleteSessionModal record={deleting} onClose={() => setDeleting(null)}
+        onDone={() => { setDeleting(null); void reload(); void reloadRecords(); }} />
+      {v2Modes.length > 0 && (
+        <RegularizeModal open={correcting} onOpenChange={setCorrecting} allowedModes={v2Modes}
+          initial={{ mode: v2Modes[0], kind: "MISSED_PUNCH", direction: "OUT" }}
+          onSaved={() => { void reload(); void reloadRecords(); }} />
+      )}
       <SessionDrawer attendanceId={open} canLocate={can(me, P.LOCATION_READ)} onClose={() => setOpen(null)} />
     </div>
   );
@@ -192,12 +275,52 @@ function LocationCell({ record }: { record: AttendanceRecord }) {
   );
 }
 
-function ManualEntry({ open, onOpenChange, onSaved }: { open: boolean; onOpenChange: (o: boolean) => void; onSaved: () => void }) {
+function hhmm(value: string | null | undefined): string {
+  if (!value) return "";
+  const d = new Date(value);
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+
+/** Delete (void) a team session (IG-AS-100): kept for audit, excluded everywhere else. */
+function DeleteSessionModal({ record, onClose, onDone }: { record: AttendanceRecord | null; onClose: () => void; onDone: () => void }) {
+  const [reason, setReason] = useState("");
+  const [saving, setSaving] = useState(false);
+  const save = async () => {
+    if (!record) return;
+    setSaving(true);
+    try {
+      await teamApi.void(record.id, reason.trim());
+      toast.success("Attendance deleted");
+      setReason("");
+      onDone();
+    } catch (e) {
+      toast.error(errorMessage(e));
+    } finally {
+      setSaving(false);
+    }
+  };
+  const when = record
+    ? `${record.employee_name}, ${fmtDate(record.date, "EEE d MMM")}: ${fmtTime(record.check_in_time)} – ${record.check_out_time ? fmtTime(record.check_out_time) : "running"}. The original punches are kept for audit.`
+    : undefined;
+  return (
+    <Modal open={record !== null} onOpenChange={(o) => !o && onClose()} title="Delete attendance" description={when}
+      footer={<><Button variant="secondary" onClick={onClose}>Cancel</Button>
+        <Button variant="danger" data-testid="delete-confirm" loading={saving} disabled={reason.trim().length < 5} onClick={save}>Delete</Button></>}>
+      <Field label="Reason" required hint="At least 5 characters">
+        <Textarea data-testid="delete-reason" value={reason} maxLength={500} onChange={(e) => setReason(e.target.value)} placeholder="Punched by mistake" />
+      </Field>
+    </Modal>
+  );
+}
+
+function ManualEntry({ open, onOpenChange, onSaved, initial }: {
+  open: boolean; onOpenChange: (o: boolean) => void; onSaved: () => void; initial?: AttendanceRecord | null;
+}) {
   const { me } = useCan();
-  const [employee, setEmployee] = useState<PickedEmployee | null>(null);
-  const [date, setDate] = useState(todayISO());
-  const [checkIn, setCheckIn] = useState("09:00");
-  const [checkOut, setCheckOut] = useState("18:00");
+  const [employee, setEmployee] = useState<PickedEmployee | null>(initial ? { id: initial.employee_id, full_name: initial.employee_name ?? "" } : null);
+  const [date, setDate] = useState(initial?.date ?? todayISO());
+  const [checkIn, setCheckIn] = useState(hhmm(initial?.check_in_time) || "09:00");
+  const [checkOut, setCheckOut] = useState(initial ? hhmm(initial.check_out_time) : "18:00");
   const [lunchStart, setLunchStart] = useState("");
   const [lunchEnd, setLunchEnd] = useState("");
   const [status, setStatus] = useState("present");
@@ -217,7 +340,7 @@ function ManualEntry({ open, onOpenChange, onSaved }: { open: boolean; onOpenCha
         // An absence carries no times and no hours (BUG-AS-04).
         ? { employee_id: employee.id, date, status, notes: notes || null }
         : {
-          employee_id: employee.id, date, status, notes: notes || null,
+          employee_id: employee.id, date, status, notes: notes || null, attendance_id: initial?.id ?? undefined,
           check_in_local: checkIn, check_out_local: checkOut || null,
           // Only sent when filled in; otherwise the existing breaks are kept (and checked against the new times).
           ...(lunchStart && lunchEnd ? { lunch_start_local: lunchStart, lunch_end_local: lunchEnd } : {}),

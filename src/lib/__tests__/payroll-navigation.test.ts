@@ -60,7 +60,7 @@ describe("payroll workspace menu (3.8 §3.2)", () => {
       { [P.PAYROLL_PAYMENT_PREPARE]: ["PAY_GROUP"], [P.PAYROLL_BANK_DETAILS_READ_MASKED]: ["PAY_GROUP"], [P.PAYROLL_RUN_READ]: ["PAY_GROUP"] },
       { employee: false },
     );
-    expect(childHrefs(payrollGroup(finance))).toEqual(["/payroll", "/payroll/runs", "/payroll/payments", "/payroll/bank-details"]);
+    expect(childHrefs(payrollGroup(finance))).toEqual(["/payroll", "/payroll/runs", "/payroll/payments", "/payroll/invoices", "/payroll/bank-details"]);
   });
 
   it("a manager without payroll codes sees no payroll menu at all", () => {
@@ -134,8 +134,8 @@ describe("payroll workspace menu (3.8 §3.2)", () => {
       Object.values(P).filter((code) => code.startsWith("payroll:")).map((code) => [code, ["COMPANY"] as Scope[]]),
     ) as Partial<Record<PermissionCode, Scope[]>>;
     expect(childHrefs(payrollGroup(me(all)))).toEqual([
-      "/payroll", "/payroll/runs", "/payroll/inputs", "/payroll/approvals", "/payroll/compensation", "/payroll/revisions",
-      "/payroll/structures", "/payroll/components", "/payroll/payments", "/payroll/bank-details", "/payroll/loans",
+      "/payroll", "/payroll/runs", "/payroll/inputs", "/payroll/approvals", "/payroll/team-inputs", "/payroll/compensation", "/payroll/revisions",
+      "/payroll/structures", "/payroll/components", "/payroll/payments", "/payroll/invoices", "/payroll/bank-details", "/payroll/loans",
       "/payroll/reimbursements", "/payroll/payslips", "/payroll/compliance", "/payroll/reports", "/downloads",
       "/settings/payroll/general", "/payroll/legacy",
     ]);

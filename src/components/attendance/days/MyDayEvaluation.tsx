@@ -25,14 +25,16 @@ export function MyDayEvaluation({ refreshKey }: { refreshKey?: unknown }) {
     { enabled });
   const evaluation = data?.day;
   if (!enabled || !evaluation) return null;
-  const late = evaluation.late_mark
-    ? (evaluation.late_excused ? "late, excused" : `late by ${evaluation.late_minutes ?? 0} min`)
-    : null;
+  const late = evaluation.day_label
+    ? evaluation.day_label.detail
+    : evaluation.late_mark
+      ? (evaluation.late_excused ? "late, excused" : `late by ${evaluation.late_minutes ?? 0} min`)
+      : null;
   return (
     <Card className="flex flex-wrap items-center gap-3 p-4 lg:col-span-2" data-testid="my-day-evaluation">
       <span className="text-sm font-medium">Today</span>
       <Badge tone={evaluation.day_result === "PRESENT" ? "success" : evaluation.day_result === "PENDING" ? "info" : "warning"} dot>
-        {LABELS[evaluation.day_result]}
+        {evaluation.day_label?.label ?? LABELS[evaluation.day_result]}
       </Badge>
       {evaluation.net_minutes !== null && (
         <span className="text-sm text-muted-foreground">{Math.floor(evaluation.net_minutes / 60)} h {evaluation.net_minutes % 60} min worked</span>

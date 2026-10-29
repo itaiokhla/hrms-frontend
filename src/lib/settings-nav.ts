@@ -41,6 +41,8 @@ export const SETTINGS_NAV: SettingsNavGroup[] = [
         href: "/settings/branding",
         visible: (me) => canAny(me, [P.BRANDING_MANAGE, P.DOMAIN_MANAGE, P.EMAIL_TEMPLATE_MANAGE]),
       },
+      // G-24: Slack / Teams / signed webhooks (integrations:manage).
+      { label: "Integrations", href: "/settings/integrations", visible: (me) => can(me, P.INTEGRATIONS_MANAGE) },
     ],
   },
   {
@@ -58,6 +60,20 @@ export const SETTINGS_NAV: SettingsNavGroup[] = [
     items: [
       { label: "Leave types & approvals", href: "/leaves?tab=policy", external: true, visible: (me) => can(me, P.LEAVE_MANAGE_POLICY) },
       { label: "Holiday calendars", href: "/holidays", external: true, visible: (me) => can(me, P.HOLIDAY_MANAGE) },
+    ],
+  },
+  {
+    // Attendance administration (AS-M3 / AS-M4 / team attendance): pages owned by the attendance module.
+    label: "Attendance",
+    items: [
+      { label: "Team attendance", href: "/settings/attendance/team", visible: (me) => can(me, P.ATTENDANCE_MANAGE_POLICY) },
+      { label: "Requests & approvals", href: "/settings/attendance/requests", visible: (me) => can(me, P.ATTENDANCE_MANAGE_POLICY) },
+      { label: "Evaluation rules", href: "/settings/attendance/rules", visible: (me) => can(me, P.ATTENDANCE_MANAGE_POLICY) },
+      { label: "Devices & biometrics", href: "/settings/attendance/devices", visible: (me) => can(me, P.ATTENDANCE_MANAGE_DEVICES) },
+      { label: "Capture methods & location", href: "/settings/attendance/capture", visible: (me) => can(me, P.ATTENDANCE_MANAGE_POLICY) },
+      { label: "Shift swaps & open shifts", href: "/settings/attendance/shift-requests", visible: (me) => can(me, P.ATTENDANCE_MANAGE_POLICY) },
+      // G-22 / G-23: go-live checklist and acceptance, country working-time packs, industry templates, Fair Workweek.
+      { label: "Readiness & country rules", href: "/settings/attendance/readiness", visible: (me) => can(me, P.ATTENDANCE_MANAGE_POLICY) },
     ],
   },
   {

@@ -42,8 +42,11 @@ describe("shift route guards", () => {
 
   it("gates every shift route GLOBAL (AS-M1 ships to every tenant) and the evaluation pages V2 (AS-M3)", () => {
     expect(Object.keys(ATTENDANCE_ROUTE_GATES).sort()).toEqual(Object.keys(ATTENDANCE_ROUTE_GUARDS).sort());
-    const v2 = ["/attendance/days/[employee_id]/[date]", "/attendance/exceptions"];
-    expect(v2.map((path) => ATTENDANCE_ROUTE_GATES[path])).toEqual(["V2", "V2"]);
+    // AS-M4 adds the muster (v2-only; requests live inside My attendance and the module-neutral inbox).
+    // AS-M6 adds the planners' shift requests page (v2-only: the API answers ATTENDANCE_V2_REQUIRED otherwise).
+    const v2 = ["/attendance/days/[employee_id]/[date]", "/attendance/exceptions", "/attendance/muster",
+      "/attendance/timesheets", "/attendance/period-close", "/attendance/shift-requests"];
+    expect(v2.map((path) => ATTENDANCE_ROUTE_GATES[path])).toEqual(["V2", "V2", "V2", "V2", "V2", "V2"]);
     const others = Object.entries(ATTENDANCE_ROUTE_GATES).filter(([path]) => !v2.includes(path)).map(([, gate]) => gate);
     expect(new Set(others)).toEqual(new Set(["GLOBAL"]));
   });

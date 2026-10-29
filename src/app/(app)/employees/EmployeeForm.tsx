@@ -26,12 +26,14 @@ export function EmployeeForm({
   onOpenChange,
   employee,
   departments,
+  initialManager = null,
   onSaved,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   employee: Employee | null;
   departments: Department[];
+  initialManager?: PickedEmployee | null;
   onSaved: (employee: Employee) => void;
 }) {
   const { can } = useCan();
@@ -56,9 +58,9 @@ export function EmployeeForm({
       setValues(next);
     } else {
       setValues({ ...EMPTY, hire_date: new Date().toISOString().slice(0, 10) });
-      setManager(null);
+      setManager(initialManager);
     }
-  }, [open, employee]);
+  }, [open, employee, initialManager]);
 
   const set = (key: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
     setValues((v) => ({ ...v, [key]: e.target.value }));

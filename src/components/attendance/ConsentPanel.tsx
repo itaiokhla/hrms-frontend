@@ -248,6 +248,9 @@ function Collection({ panel }: { panel: PrivacyPanel }) {
     { icon: ShieldCheck, title: "Site checks", value: [c.site_checks.geofence !== "OFF" ? `Area: ${GEOFENCE_LABEL[c.site_checks.geofence] ?? c.site_checks.geofence}` : null,
       c.site_checks.network !== "OFF" ? `Network: ${c.site_checks.network.toLowerCase()}` : null, c.site_checks.qr !== "OFF" ? "QR poster" : null]
       .filter(Boolean).join(" · ") || "None", note: "Your manager sees only whether you were at your site, never where you were." },
+    { icon: MapPin, title: "Location during your shift",
+      value: c.tracking ? `About every ${c.tracking_interval_minutes ?? "?"} minutes while checked in` : "Not tracked",
+      note: c.tracking ? `Never outside work${c.tracking_pause_on_break ? "; paused on breaks" : ""}. Withdraw "Location during your shift" below to stop it.` : null },
     { icon: Fingerprint, title: "Face match", value: c.face_match.on ? (c.face_match.applies_to_me ? "On for you" : "Off for you") : "Not used",
       note: c.face_match.note ?? (c.face_match.on ? "Compared with your own enrolled face only." : null) },
     { icon: FileText, title: "Where you can punch", value: c.sources.map((s) => SOURCE_LABEL[s] ?? s).join(", ") || "—",

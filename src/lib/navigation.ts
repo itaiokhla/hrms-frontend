@@ -4,6 +4,7 @@ import {
   Boxes,
   Calculator,
   CalendarCheck2,
+  Fingerprint,
   CalendarClock,
   CalendarDays,
   CalendarRange,
@@ -14,6 +15,9 @@ import {
   FileSpreadsheet,
   FileText,
   Gauge,
+  Home,
+  Inbox,
+  Briefcase,
   Coins,
   Download,
   History,
@@ -21,6 +25,7 @@ import {
   LayoutDashboard,
   Layers,
   ListChecks,
+  MapPin,
   Network,
   PiggyBank,
   Building,
@@ -44,8 +49,9 @@ import {
 
 import { can, canAny, canBeyondSelf, companyWide } from "./access";
 import {
-  attendanceV2, canManageAttendanceCutover, canSeeAttendanceExceptions, canSeeMySchedule, canSeeRosters, canSeeShifts,
-  canSeeTeams,
+  attendanceV2, canClosePeriods, canManageAttendanceCutover, canManageDevices, canExportAttendance, canSeeApprovals, canSeeAttendanceExceptions, canSeeMuster,
+  canSeeMySchedule, canSeeOnDuty, canSeeRosters, canSeeShifts, canSeeTeams, canSeeTimesheets, canManageSites,
+  canSeeMyPrivacy, canManageShiftRequests,
 } from "./attendance-routes";
 import { P, type PermissionCode } from "./permissions.generated";
 import type { Me } from "./types";
@@ -110,6 +116,13 @@ export const PAYROLL_WORKSPACE_ITEMS: NavItem[] = [
   { label: "Pay Runs", href: "/payroll/runs", icon: ListChecks, visible: (me) => beyondSelfAny(me, [P.PAYROLL_RUN_READ]) },
   { label: "Wage Inputs", href: "/payroll/inputs", icon: FileSpreadsheet, visible: (me) => beyondSelfAny(me, [P.PAYROLL_INPUTS_READ]) },
   { label: "Approvals", href: "/payroll/approvals", icon: ClipboardCheck, visible: (me) => beyondSelfAny(me, PAYROLL_APPROVE_CODES) },
+  // Managers / team leads prepare their team's pay inputs and contractor invoices (team_pay:*); payroll approves here too.
+  {
+    label: "Team payroll",
+    href: "/payroll/team-inputs",
+    icon: UsersRound,
+    visible: (me) => beyondSelfAny(me, [P.TEAM_PAY_READ, P.TEAM_PAY_SUBMIT, P.PAYROLL_INPUTS_APPROVE]),
+  },
   {
     label: "Assign Salary",
     href: "/payroll/compensation",
@@ -140,6 +153,12 @@ export const PAYROLL_WORKSPACE_ITEMS: NavItem[] = [
     icon: ArrowLeftRight,
     visible: (me) =>
       beyondSelfAny(me, [P.PAYROLL_PAYMENT_PREPARE, P.PAYROLL_PAYMENT_APPROVE, P.PAYROLL_PAYMENT_SUBMIT, P.PAYROLL_PAYMENT_RECONCILE]),
+  },
+  {
+    label: "Invoices",
+    href: "/payroll/invoices",
+    icon: Receipt,
+    visible: (me) => beyondSelfAny(me, [P.PAYROLL_PAYMENT_PREPARE, P.PAYROLL_PAYMENT_APPROVE]),
   },
   {
     label: "Bank Details",
@@ -288,6 +307,28 @@ export const NAV: NavGroup[] = [
           // AS-M5: roster:plan ∨ roster:publish ∨ roster:read beyond SELF; My schedule for any linked employee.
           { label: "Rosters", href: "/rosters", icon: CalendarRange, visible: canSeeRosters },
           { label: "My schedule", href: "/rosters/my-schedule", icon: CalendarDays, visible: canSeeMySchedule },
+          // AS-M6 (G-15): swaps, changes, pickups to approve; open shifts; availability (V2 gate).
+          { label: "Shift requests", href: "/attendance/shift-requests", icon: ArrowLeftRight,
+            visible: (me) => attendanceV2(me) && canManageShiftRequests(me) },
+          // AS-M4 (G-13): module-neutral approvals inbox, on-duty / remote work, supervisor muster (V2 gate on muster).
+          // Nested under Attendance (IG-AS-85) so the e2e sidebar label lists stay unchanged.
+          { label: "Approvals", href: "/approvals?module=attendance", icon: Inbox, visible: canSeeApprovals },
+          { label: "On duty", href: "/attendance/on-duty", icon: Briefcase, visible: canSeeOnDuty },
+          { label: "Remote work", href: "/attendance/remote-work", icon: Home, visible: canSeeOnDuty },
+          { label: "Muster", href: "/attendance/muster", icon: ClipboardCheck,
+            visible: (me) => attendanceV2(me) && canSeeMuster(me) },
+          { label: "Timesheets", href: "/attendance/timesheets", icon: FileClock,
+            visible: (me) => attendanceV2(me) && canSeeTimesheets(me) },
+          { label: "Period close", href: "/attendance/period-close", icon: ShieldCheck,
+            visible: (me) => attendanceV2(me) && canClosePeriods(me) },
+          // AS-M2 / AS-M7 (G-17): kiosks, biometric terminals and agents, device mappings and CSV imports.
+          { label: "Devices", href: "/attendance/devices", icon: Fingerprint, visible: canManageDevices },
+          // AS-M2 (G-06 phase 3): geofences, office networks, QR posters; the employee's privacy & consents page.
+          { label: "Sites", href: "/attendance/sites", icon: MapPin, visible: canManageSites },
+          { label: "Privacy & consents", href: "/me/attendance/privacy", icon: ShieldCheck,
+            visible: (me) => canSeeMyPrivacy(me) && can(me, P.ATTENDANCE_MARK) },
+          // AS-M9 (G-20): statutory registers (Form 25, Form D), attendance:export.
+          { label: "Registers", href: "/reports/attendance", icon: FileClock, visible: canExportAttendance },
           // AS-M3 (V2 gate): decided days with exceptions, for readers beyond SELF.
           { label: "Exceptions", href: "/attendance/exceptions", icon: ListChecks,
             visible: (me) => attendanceV2(me) && canSeeAttendanceExceptions(me) },

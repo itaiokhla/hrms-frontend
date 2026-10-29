@@ -75,7 +75,9 @@ export function AttendanceDayView({ employeeId, date }: { employeeId: string; da
             <>
               <Card className="space-y-4 p-5">
                 <div className="flex flex-wrap items-center gap-3">
-                  <Badge tone={RESULT_TONES[day.day_result]} dot data-testid="day-result">{RESULT_LABELS[day.day_result]}</Badge>
+                  <Badge tone={RESULT_TONES[day.day_result]} dot data-testid="day-result">{day.day_label?.label ?? RESULT_LABELS[day.day_result]}</Badge>
+                  {day.day_label?.detail && <span className="text-sm text-muted-foreground" data-testid="day-label-detail">{day.day_label.detail}</span>}
+                  {day.day_label?.badges.map((b) => <Badge key={b} tone={b === "Excused" ? "success" : "warning"}>{b}</Badge>)}
                   <Badge tone="neutral">{STATE_LABELS[day.evaluation_state]}</Badge>
                   <span className="text-xs text-muted-foreground">
                     Version {day.version} · {day.rules_mode === "STANDARD" ? "Attendance rules" : "Legacy rules"}

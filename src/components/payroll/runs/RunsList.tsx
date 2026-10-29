@@ -1,6 +1,6 @@
 "use client";
 
-import { ListChecks, Plus } from "lucide-react";
+import { HeartPulse, ListChecks, Plus } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useMemo, useState } from "react";
 
@@ -16,6 +16,7 @@ import { VOCABULARIES } from "@/lib/payroll/catalogues.generated";
 import { RUN_STAGES } from "@/lib/payroll/labels";
 
 import { runsApi } from "./api";
+import { CutoffAssistant } from "./CutoffAssistant";
 import { NewRunModal } from "./NewRunModal";
 import { MoneyStack, RUN_TYPE_LABELS, WorkspaceHeader, canCreateRuns, figureByCurrency, periodLabel, useLookups } from "./shared";
 import type { Run } from "./types";
@@ -44,6 +45,7 @@ export function RunsList() {
   // one the viewer may take now in its scope; for approvals only the current approver. Deep link: ?mine=1.
   const [mine, setMine] = useState(() => search?.get("mine") === "1");
   const [skip, setSkip] = useState(0);
+  const [health, setHealth] = useState(false);
   const groupNumber = Number(group) || 0;
   const periods = useApi(() => runsApi.periods(groupNumber), [groupNumber], { enabled: groupNumber > 0 });
 
@@ -99,11 +101,17 @@ export function RunsList() {
         title="Pay Runs"
         description="Every run of every pay group in your scope. Open one to calculate, review, approve and finalize it."
         actions={
-          create && (
-            <Button onClick={() => newRun.openModal()}>
-              <Plus className="h-4 w-4" aria-hidden /> New pay run
+          <>
+            {/* G-16 (X 03 §5): the cross-module cutoff assistant before inputs lock. */}
+            <Button variant="secondary" data-testid="pre-run-health" onClick={() => setHealth(true)}>
+              <HeartPulse className="h-4 w-4" aria-hidden /> Pre-run health check
             </Button>
-          )
+            {create && (
+              <Button onClick={() => newRun.openModal()}>
+                <Plus className="h-4 w-4" aria-hidden /> New pay run
+              </Button>
+            )}
+          </>
         }
       />
       <Card>
@@ -207,6 +215,8 @@ export function RunsList() {
         )}
       </Card>
       {create && <NewRunModal />}
+      <CutoffAssistant open={health} onOpenChange={setHealth} initialGroup={groupNumber || null}
+        payGroups={lookups.payGroups.map((g) => ({ id: g.id, name: g.name }))} />
     </div>
   );
 }

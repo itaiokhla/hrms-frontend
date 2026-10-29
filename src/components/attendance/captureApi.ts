@@ -32,6 +32,10 @@ export interface PageOf<T> {
 export interface CaptureView {
   profile: "STANDARD" | "LEGACY_V1" | string;
   sources: string[];
+  /** AS-M12: punches made without network are queued on the phone and synced later. */
+  offline_punches?: "OFF" | "ALLOW";
+  offline_max_age_hours?: number;
+  tracking?: { enabled: boolean; interval_minutes: number; grace_minutes: number; pause_on_break: boolean };
   shift_required: boolean;
   capture_required: boolean;
   face_on_punch: boolean;
@@ -164,10 +168,138 @@ export interface DeviceWithClaim extends Device {
 export interface DeviceBody {
   code: string;
   name: string;
-  kind?: "KIOSK";
+  kind?: "KIOSK" | "TERMINAL" | "AGENT";
   branch_id?: number | null;
   site_id?: number | null;
   timezone?: string | null;
+  vendor?: string | null;
+  serial_number?: string | null;
+  direction_mode?: string | null;
+  device_role?: string | null;
+}
+
+/** TERMINAL / AGENT fields (AS-M7): computed health, watermark and protocol, never the secret. */
+export interface IngestDevice extends Device {
+  serial_number: string | null;
+  direction_mode: string;
+  device_role: string;
+  has_secret: boolean;
+  watermark_at: string | null;
+  last_punch_at: string | null;
+  last_clock_skew_seconds: number | null;
+  backfill_from: string | null;
+  protocol_version: string | null;
+  endpoint: string;
+}
+
+/** Activate / rotate-secret: the secret is in this answer only (copy it into the device now). */
+export interface DeviceConnection {
+  secret: string;
+  serial_number?: string | null;
+  agent_id?: string | null;
+  server_path: string;
+  instructions: string;
+}
+
+export interface FirstContact {
+  required: boolean;
+  seen?: boolean;
+  first_seen_at?: string;
+  last_seen_at?: string;
+  ip_hash?: string | null;
+  payload_count?: number;
+}
+
+export interface DevicePunchRow {
+  id: number;
+  occurred_at: string;
+  device_user_id: string | null;
+  employee: { id: number; name: string; code: string } | null;
+  direction: string;
+  verify_mode: string | null;
+  mapping_status: string;
+  disposition: string;
+  evidence_flags: string[];
+}
+
+export interface DeviceSummary {
+  device: IngestDevice;
+  punches: number;
+  unmapped_user_ids: number;
+  open_rejects: number;
+  rejected_today: number;
+  recent: DevicePunchRow[];
+}
+
+export interface DeviceMapping {
+  id: number;
+  device_id: number | null;
+  device_user_id: string;
+  device_user_label: string;
+  employee_id: number;
+  employee: { id: number; name: string; code: string } | null;
+  effective_from: string;
+  effective_to: string | null;
+  sync_state: string;
+  row_version: number;
+}
+
+export interface UnmappedUser {
+  device_id: number | null;
+  device_user_id: string;
+  count: number;
+  first_at: string | null;
+  last_at: string | null;
+}
+
+export interface DeviceCommand {
+  id: number;
+  device_id: number;
+  command: string;
+  payload: Record<string, unknown>;
+  status: string;
+  return_code: string | null;
+  expires_at: string | null;
+  sent_at: string | null;
+  acked_at: string | null;
+  created_at: string | null;
+  row_version: number;
+}
+
+export interface IngestReject {
+  id: number;
+  line_no: number;
+  reason: string;
+  payload_hash: string;
+  ingest_batch_id: string;
+  status: string;
+  created_at: string | null;
+}
+
+export interface ImportRow {
+  row: number;
+  valid_time: boolean;
+  employee_id?: number | null;
+  employee?: { name: string; code: string } | null;
+  employee_code?: string | null;
+  device_user_id?: string | null;
+  date?: string | null;
+  time?: string | null;
+  timezone?: string;
+  direction?: string;
+  occurred_at?: string;
+  mapping_status?: string;
+  issues: string[];
+}
+
+export interface PunchImport {
+  id: number;
+  file_name: string;
+  status: "DRY_RUN" | "COMMITTED" | string;
+  totals: { rows: number; valid: number; invalid: number; unmapped: number; duplicates: number; inserted?: number };
+  rows: ImportRow[];
+  created_at: string | null;
+  committed_at: string | null;
 }
 
 export interface ReviewItem {
@@ -271,6 +403,9 @@ export interface PrivacyPanel {
     location_at_punch: string;
     location_on_breaks: string;
     tracking: boolean;
+    /** Periodic location check interval while checked in (capture policy `tracking.interval_minutes`). */
+    tracking_interval_minutes?: number | null;
+    tracking_pause_on_break?: boolean;
     face_match: { on: boolean; applies_to_me: boolean; note: string | null };
     punch_photo: boolean;
     kiosk_methods: string[];
@@ -425,15 +560,54 @@ export const captureApi = {
   networkTest: (params: { site_id?: number; branch_id?: number } = {}) =>
     request<NetworkTest>("get", "/attendance/sites/network-test", undefined, { params: clean(params) }),
 
-  /* devices (KIOSK registry) */
-  devices: (params: { status?: string; q?: string; skip?: number; limit?: number } = {}) =>
-    request<PageOf<Device>>("get", "/attendance/devices", undefined, { params: clean({ skip: 0, limit: 25, ...params }) }),
-  device: (id: number | string) => request<Device>("get", `/attendance/devices/${id}`),
+  /* devices: KIOSK registry (AS-M2), TERMINAL / AGENT (AS-M7) */
+  devices: (params: { status?: string; q?: string; kind?: string; skip?: number; limit?: number } = {}) =>
+    request<PageOf<Device & Partial<IngestDevice>>>("get", "/attendance/devices", undefined, { params: clean({ skip: 0, limit: 25, ...params }) }),
+  device: (id: number | string) => request<Device & Partial<IngestDevice>>("get", `/attendance/devices/${id}`),
   createDevice: (body: DeviceBody, idempotencyKey?: string) =>
-    request<DeviceWithClaim>("post", "/attendance/devices", { kind: "KIOSK", ...body }, { idempotencyKey }),
+    request<DeviceWithClaim & Partial<IngestDevice>>("post", "/attendance/devices", { kind: "KIOSK", ...clean({ ...body }) }, { idempotencyKey }),
   reissueClaim: (id: number) => request<DeviceWithClaim>("post", `/attendance/devices/${id}/claim-code`),
   deviceAction: (id: number, action: "suspend" | "resume" | "retire", rowVersion: number, reason?: string) =>
     request<DeviceWithClaim>("post", `/attendance/devices/${id}/${action}`, clean({ reason }), { rowVersion }),
+  firstContact: (id: number) => request<FirstContact>("get", `/attendance/devices/${id}/first-contact`),
+  deviceSummary: (id: number) => request<DeviceSummary>("get", `/attendance/devices/${id}/summary`),
+  activateDevice: (id: number, body: { claim_code: string; serial_number?: string }) =>
+    request<IngestDevice & { connection: DeviceConnection }>("post", `/attendance/devices/${id}/activate`, clean(body)),
+  rotateSecret: (id: number) =>
+    request<IngestDevice & { connection: DeviceConnection }>("post", `/attendance/devices/${id}/rotate-secret`),
+  updateDevice: (id: number, body: Partial<DeviceBody>, rowVersion: number) =>
+    request<IngestDevice>("patch", `/attendance/devices/${id}`, clean({ ...body }), { rowVersion }),
+  deviceCommands: (id: number) => request<{ items: DeviceCommand[] }>("get", `/attendance/devices/${id}/commands`),
+  queueCommand: (id: number, command: string, payload: Record<string, unknown> = {}) =>
+    request<DeviceCommand>("post", `/attendance/devices/${id}/commands`, { command, payload }),
+  cancelCommand: (id: number, commandId: number, rowVersion: number) =>
+    request<DeviceCommand>("post", `/attendance/devices/${id}/commands/${commandId}/cancel`, undefined, { rowVersion }),
+  deviceRejects: (id: number) => request<{ items: IngestReject[] }>("get", `/attendance/devices/${id}/rejects`),
+  revealReject: (id: number, rejectId: number) =>
+    request<{ id: number; raw_line: string | null; reason: string }>("post", `/attendance/devices/${id}/rejects/${rejectId}/reveal`),
+  dismissReject: (id: number, rejectId: number) =>
+    request<{ id: number; status: string }>("post", `/attendance/devices/${id}/rejects/${rejectId}/dismiss`),
+
+  /* device user mappings (M-1..M-11) */
+  mappings: (params: { device_id?: number | null; q?: string; skip?: number; limit?: number } = {}) =>
+    request<PageOf<DeviceMapping> & { unmapped: UnmappedUser[] }>("get", "/attendance/device-mappings", undefined,
+      { params: clean({ skip: 0, limit: 50, ...params }) }),
+  saveMappings: (items: { device_id?: number | null; device_user_id: string; employee_id: number; effective_from?: string; effective_to?: string | null }[]) =>
+    request<{ items: DeviceMapping[]; mapped_dates: number }>("post", "/attendance/device-mappings", { items }),
+  autoMatch: (body: { device_id?: number | null; effective_from?: string; dry_run?: boolean }) =>
+    request<{ dry_run: boolean; would_create?: number; created?: number; skipped: { employee_code: string; reason: string }[];
+      items: { employee_name?: string; device_user_id: string; canonical?: string }[] }>("post", "/attendance/device-mappings/auto-match", body),
+  endMapping: (id: number, effectiveTo: string, rowVersion: number) =>
+    request<DeviceMapping>("post", `/attendance/device-mappings/${id}/end`, { effective_to: effectiveTo }, { rowVersion }),
+
+  /* CSV punch imports (01 §8.6) */
+  importPunches: (file: File, dryRun = true) => {
+    const form = new FormData();
+    form.append("file", file, file.name);
+    form.append("dry_run", dryRun ? "true" : "false");
+    return request<PunchImport>("post", "/attendance/imports", form);
+  },
+  commitImport: (id: number) => request<PunchImport>("post", `/attendance/imports/${id}/commit`),
 
   /* review queue */
   review: (filters: ReviewFilters = {}) =>

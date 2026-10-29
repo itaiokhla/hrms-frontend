@@ -7,6 +7,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import toast from "react-hot-toast";
 
 import { useCan } from "@/components/access/Can";
+import { OvertimeReview } from "@/components/attendance/overtime/OvertimeReview";
 import { Timeline, type TimelineItem } from "@/components/payroll/Timeline";
 import { useModalRoute } from "@/components/payroll/useModalRoute";
 import { Button } from "@/components/ui/button";
@@ -349,7 +350,7 @@ function EntryTable({ params, mode, refresh }: { params: Record<string, unknown>
   );
 }
 
-const TABS = ["mine", "approvals", "all"] as const;
+const TABS = ["mine", "approvals", "review", "all"] as const;
 
 /**
  * Overtime (3.8 §3.4 managers): the employee request form (overtime:request) and the manager
@@ -360,7 +361,7 @@ export function OvertimeWorkspace() {
   const canRequest = can(me, P.OVERTIME_REQUEST) && !!me?.employee;
   const canApprove = can(me, P.OVERTIME_APPROVE);
   const seeAll = canBeyondSelf(me, P.OVERTIME_APPROVE) || canBeyondSelf(me, P.PAYROLL_INPUTS_READ);
-  const allowed = TABS.filter((t) => (t === "mine" ? canRequest : t === "approvals" ? canApprove : seeAll));
+  const allowed = TABS.filter((t) => (t === "mine" ? canRequest : t === "approvals" || t === "review" ? canApprove : seeAll));
   const [tab, setTab] = useTabParam<(typeof TABS)[number]>(allowed.length ? allowed : TABS, allowed[0] ?? "mine");
   const [dirty, setDirty] = useState(false);
   const modal = useModalRoute("overtime-request", { keys: [], dirty });
@@ -385,7 +386,8 @@ export function OvertimeWorkspace() {
       <Tabs
         value={tab}
         onValueChange={(v) => setTab(v as (typeof TABS)[number])}
-        tabs={allowed.map((t) => ({ value: t, label: t === "mine" ? "My overtime" : t === "approvals" ? "Waiting for my approval" : "All entries" }))}
+        tabs={allowed.map((t) => ({ value: t, label: t === "mine" ? "My overtime" : t === "approvals" ? "Waiting for my approval"
+          : t === "review" ? "Review with attendance" : "All entries" }))}
       >
         {canRequest && (
           <TabPanel value="mine">
@@ -395,6 +397,11 @@ export function OvertimeWorkspace() {
         {canApprove && (
           <TabPanel value="approvals">
             <EntryTable params={{ awaiting: true }} mode="approve" refresh={refresh} />
+          </TabPanel>
+        )}
+        {canApprove && (
+          <TabPanel value="review">
+            <OvertimeReview />
           </TabPanel>
         )}
         {seeAll && (

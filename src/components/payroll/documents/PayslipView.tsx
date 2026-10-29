@@ -7,6 +7,7 @@ import toast from "react-hot-toast";
 
 import { useCan } from "@/components/access/Can";
 import { ExplainPanel, type ExplainInput, type ExplainSource } from "@/components/payroll/ExplainPanel";
+import { RetroBreakdown } from "@/components/payroll/RetroBreakdown";
 import { MoneyText } from "@/components/payroll/MoneyText";
 import { StatusChip } from "@/components/payroll/StatusChip";
 import type { ModalRoute } from "@/components/payroll/useModalRoute";
@@ -406,7 +407,13 @@ export function PayslipDocument({ detail, explainer, newerHref }: { detail: Pays
       case "EARNINGS":
         return <LinesTable key={code} title={title(code)} items={c.earnings ?? []} currency={currency} showYtd={c.show_ytd} explainer={explainer} runId={detail.run_id} runEmployeeId={detail.run_employee_id} total={{ label: "Gross earnings", amount: c.totals.gross }} />;
       case "DEDUCTIONS":
-        return <LinesTable key={code} title={title(code)} items={c.deductions ?? []} currency={currency} showYtd={c.show_ytd} explainer={explainer} runId={detail.run_id} runEmployeeId={detail.run_employee_id} total={{ label: "Total deductions", amount: c.totals.deductions }} />;
+        return (
+          <div key={code} className="space-y-4">
+            <LinesTable title={title(code)} items={c.deductions ?? []} currency={currency} showYtd={c.show_ytd} explainer={explainer} runId={detail.run_id} runEmployeeId={detail.run_employee_id} total={{ label: "Total deductions", amount: c.totals.deductions }} />
+            {/* G-16 (JC-AS-11): retro attendance adjustments, linked to the evaluated day revision that caused them. */}
+            {detail.run_employee_id && <RetroBreakdown runEmployeeId={detail.run_employee_id} />}
+          </div>
+        );
       case "REIMBURSEMENTS":
         if (!c.reimbursements?.length) return null;
         return <LinesTable key={code} title={title(code)} items={c.reimbursements} currency={currency} showYtd={false} explainer={explainer} runId={detail.run_id} runEmployeeId={detail.run_employee_id} total={{ label: "Total reimbursements", amount: c.totals.reimbursements }} />;

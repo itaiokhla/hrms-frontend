@@ -1,9 +1,9 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Eye, Rocket } from "lucide-react";
+import { Eye, Plus, Rocket, Trash2 } from "lucide-react";
 import { useState } from "react";
-import { useForm } from "react-hook-form";
+import { useFieldArray, useForm } from "react-hook-form";
 import toast from "react-hot-toast";
 import { z } from "zod";
 
@@ -15,10 +15,36 @@ import { errorMessage } from "@/lib/api";
 import { fmtDate, todayISO } from "@/lib/format";
 import { useApi } from "@/lib/hooks";
 
-import { attendanceRulesApi, type RulesFields, type SimulateResult } from "./api";
+import { attendanceRulesApi, type BreakDefault, type RulesFields, type SimulateResult } from "./api";
 
 const minutes = z.coerce.number().int().min(0).max(1440);
 const optionalLimit = z.union([z.literal(""), z.coerce.number().int().min(1).max(720)]);
+const clock = z.union([z.literal(""), z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "HH:MM")]);
+
+/** One BreakRule of ``break_defaults`` (03-shifts/01 §5.1): the breaks of a custom-time roster entry without a shift. */
+export const breakRuleSchema = z.object({
+  kind: z.enum(["LUNCH", "REST", "PERSONAL", "OTHER"]),
+  mode: z.enum(["PUNCHED", "FIXED_WINDOW", "FLOATING_WINDOW", "AUTO_DEDUCT"]),
+  minutes: z.coerce.number().int().min(1, "1-240").max(240, "1-240"),
+  paid: z.boolean(),
+  start: clock,
+  end: clock,
+  after: z.union([z.literal(""), z.coerce.number().int().min(0).max(1440)]),
+}).superRefine((b, ctx) => {
+  if (b.mode === "FIXED_WINDOW" || b.mode === "FLOATING_WINDOW") {
+    if (!b.start) ctx.addIssue({ code: "custom", path: ["start"], message: "Required" });
+    if (!b.end) ctx.addIssue({ code: "custom", path: ["end"], message: "Required" });
+  }
+  if (b.mode === "FIXED_WINDOW" && b.start && b.end) {
+    const toMin = (t: string) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3));
+    if ((toMin(b.end) - toMin(b.start) + 1440) % 1440 !== b.minutes)
+      ctx.addIssue({ code: "custom", path: ["end"], message: "End - start must equal the minutes" });
+  }
+  if (b.mode === "AUTO_DEDUCT" && b.after === "")
+    ctx.addIssue({ code: "custom", path: ["after"], message: "Deduct after how many worked minutes?" });
+});
+export type BreakRuleForm = z.infer<typeof breakRuleSchema>;
+const NEW_BREAK: BreakRuleForm = { kind: "LUNCH", mode: "AUTO_DEDUCT", minutes: 30, paid: false, start: "", end: "", after: 300 };
 
 /** 02 §4.3 rules as a form schema; the server validates again (INVALID_FIELDS). */
 export const rulesSchema = z.object({
@@ -39,6 +65,7 @@ export const rulesSchema = z.object({
   short_hours_enabled: z.boolean(),
   short_tolerance_minutes: z.coerce.number().int().min(0).max(240),
   break_attestation: z.boolean(),
+  break_defaults: z.array(breakRuleSchema).max(4).default([]),
 }).superRefine((v, ctx) => {
   if (v.half_day_min_minutes > v.full_day_min_minutes)
     ctx.addIssue({ code: "custom", path: ["half_day_min_minutes"], message: "Cannot exceed the full-day minimum" });
@@ -61,7 +88,17 @@ export function toFields(v: RulesForm): RulesFields {
     late_waiver: v.late_waiver, early_waiver: "NONE", short_hours_enabled: v.short_hours_enabled,
     short_tolerance_minutes: v.short_tolerance_minutes, break_attestation: v.break_attestation,
     ot_post_shift_buffer_minutes: 0,
+    break_defaults: (v.break_defaults ?? []).map(breakFields),
   };
+}
+
+/** Form row -> server BreakRule: the window fields the mode uses, nothing else. */
+export function breakFields(b: BreakRuleForm): BreakDefault {
+  const out: BreakDefault = { kind: b.kind, mode: b.mode, minutes: b.minutes, paid: b.paid };
+  if (b.mode === "FIXED_WINDOW") Object.assign(out, { start: b.start, end: b.end });
+  if (b.mode === "FLOATING_WINDOW") Object.assign(out, { window_start: b.start, window_end: b.end });
+  if (b.after !== "" && (b.mode === "AUTO_DEDUCT" || b.mode === "FLOATING_WINDOW")) out.auto_deduct_after_minutes = b.after;
+  return out;
 }
 
 const DEFAULTS: RulesForm = {
@@ -69,14 +106,15 @@ const DEFAULTS: RulesForm = {
   full_day_min_minutes: 480, half_day_min_minutes: 240, full_day_min_percent: 90, half_day_min_percent: 50,
   absent_marking: "AUTO_ABSENT", grace_in_minutes: "", grace_out_minutes: 0, late_half_day_after_minutes: "",
   early_half_day_before_minutes: "", late_waiver: "NONE", short_hours_enabled: false, short_tolerance_minutes: 0,
-  break_attestation: false,
+  break_attestation: false, break_defaults: [],
 };
 
 /** Settings › Attendance › Rules: draft a STANDARD rules version, preview its impact (§5.4), activate it (§4.6). */
 export function RulesPolicyEditor() {
   const { data: existing, error, reload } = useApi(() => attendanceRulesApi.list(), []);
-  const { register, handleSubmit, watch, formState: { errors } } = useForm<RulesForm>({
+  const { register, handleSubmit, watch, control, formState: { errors } } = useForm<RulesForm>({
     resolver: zodResolver(rulesSchema), defaultValues: DEFAULTS });
+  const breaks = useFieldArray({ control, name: "break_defaults" });
   const [draft, setDraft] = useState<{ id: number; version: number; effectiveFrom: string } | null>(null);
   const [preview, setPreview] = useState<SimulateResult | null>(null);
   const [reason, setReason] = useState("");
@@ -172,6 +210,37 @@ export function RulesPolicyEditor() {
           <Field label="Short-hours tolerance (minutes)" error={err("short_tolerance_minutes")}><Input type="number" {...register("short_tolerance_minutes")} /></Field>
           <label className="flex items-center gap-2 text-sm"><input type="checkbox" {...register("short_hours_enabled")} /> Mark short days</label>
           <label className="flex items-center gap-2 text-sm"><input type="checkbox" {...register("break_attestation")} /> Ask at check-out whether the break was taken</label>
+        </Card>
+        <Card className="space-y-3 p-5" data-testid="rules-break-defaults">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-medium">Default breaks</p>
+              <p className="text-xs text-muted-foreground">For roster entries with custom times and no shift. A shift keeps its own break rules.</p>
+            </div>
+            <Button type="button" variant="ghost" size="sm" disabled={breaks.fields.length >= 4} onClick={() => breaks.append(NEW_BREAK)}>
+              <Plus className="h-4 w-4" aria-hidden /> Add break
+            </Button>
+          </div>
+          {breaks.fields.length === 0 && <p className="text-sm text-muted-foreground">No default breaks: only punched breaks are deducted.</p>}
+          {breaks.fields.map((row, i) => {
+            const mode = watch(`break_defaults.${i}.mode`);
+            const rowErr = errors.break_defaults?.[i];
+            const windowed = mode === "FIXED_WINDOW" || mode === "FLOATING_WINDOW";
+            return (
+              <div key={row.id} className="grid items-end gap-3 rounded-md border border-border p-3 sm:grid-cols-3 lg:grid-cols-7" data-testid={`break-default-${i}`}>
+                <Field label="Kind"><Select {...register(`break_defaults.${i}.kind`)}><option value="LUNCH">Lunch</option><option value="REST">Rest</option><option value="PERSONAL">Personal</option><option value="OTHER">Other</option></Select></Field>
+                <Field label="How"><Select {...register(`break_defaults.${i}.mode`)}><option value="AUTO_DEDUCT">Deduct automatically</option><option value="FIXED_WINDOW">Fixed window</option><option value="FLOATING_WINDOW">Within a window</option><option value="PUNCHED">Punched only</option></Select></Field>
+                <Field label="Minutes" error={rowErr?.minutes?.message}><Input type="number" {...register(`break_defaults.${i}.minutes`)} /></Field>
+                {windowed && <Field label={mode === "FIXED_WINDOW" ? "Starts" : "Window from"} error={rowErr?.start?.message}><Input type="time" {...register(`break_defaults.${i}.start`)} /></Field>}
+                {windowed && <Field label={mode === "FIXED_WINDOW" ? "Ends" : "Window to"} error={rowErr?.end?.message}><Input type="time" {...register(`break_defaults.${i}.end`)} /></Field>}
+                {(mode === "AUTO_DEDUCT" || mode === "FLOATING_WINDOW") && <Field label="After worked (minutes)" error={rowErr?.after?.message}><Input type="number" {...register(`break_defaults.${i}.after`)} /></Field>}
+                <div className="flex items-center gap-3 pb-2">
+                  <label className="flex items-center gap-2 text-sm"><input type="checkbox" {...register(`break_defaults.${i}.paid`)} /> Paid</label>
+                  <Button type="button" variant="ghost" size="sm" aria-label={`Remove break ${i + 1}`} onClick={() => breaks.remove(i)}><Trash2 className="h-4 w-4" aria-hidden /></Button>
+                </div>
+              </div>
+            );
+          })}
         </Card>
         <Button type="submit" variant="secondary" loading={busy === "preview"}><Eye className="h-4 w-4" aria-hidden /> Save draft and preview impact</Button>
       </form>

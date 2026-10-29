@@ -126,7 +126,11 @@ test("AS-M0 (a)-(f): punches, overnight manual entry, paged history, settings, O
     const taken = await api(emily.page, "GET",
       `/overtime/entries?employee_id=${employeeId("gamma", "carlos")}&start=2026-10-01&end=2026-10-31&limit=100`);
     const used = new Set(((taken.data.items ?? taken.data) as { date: string }[]).map((e) => e.date));
-    const day = ["2026-10-22", "2026-10-21", "2026-10-20", "2026-10-19", "2026-10-23", "2026-10-26"].find((d) => !used.has(d))!;
+    // Every October weekday up to the 27th, latest first (each rerun of the suite books one of them).
+    const weekdays = Array.from({ length: 27 }, (_, i) => new Date(Date.UTC(2026, 9, 27 - i)))
+      .filter((d) => d.getUTCDay() % 6 !== 0).map((d) => d.toISOString().slice(0, 10));
+    const day = weekdays.find((d) => !used.has(d));
+    if (!day) throw new Error("Carlos has overtime on every October weekday: reseed the time stack.");
     await form.getByLabel("Date").fill(day);
     await form.getByLabel("Hours").fill("8");
     await form.getByLabel("From (optional)").fill("22:00");
