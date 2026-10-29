@@ -210,7 +210,6 @@ export function HierarchyTable({ nodes, canManage, onSelectEmployee, onRefresh }
               size="sm"
               variant="secondary"
               onClick={() => {
-                setBulkTargetManager(null);
                 setBulkAssignManagerOpen(true);
               }}
             >
