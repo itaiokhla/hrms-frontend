@@ -12,7 +12,7 @@ import { addDays, todayIn } from "@/components/shifts/shiftModel";
 import { Button } from "@/components/ui/button";
 import { EmptyState, ErrorState, Tabs } from "@/components/ui/layout";
 import { Badge, Card, Skeleton } from "@/components/ui/primitives";
-import { toApiError } from "@/lib/api";
+import { api, toApiError } from "@/lib/api";
 import { fmtDate } from "@/lib/format";
 import { useApi } from "@/lib/hooks";
 import { cn } from "@/lib/cn";
@@ -92,6 +92,10 @@ export function MySchedule() {
   const incoming = useApi(() => (canRequest ? shiftRequestsApi.list("incoming") : Promise.resolve({ items: [] })), [canRequest]);
   const { data: shiftList } = useApi(() => shiftsApi.list({ limit: 100, status: "ACTIVE" })
     .then((p) => p.items.map((s) => ({ id: s.id, code: s.code ?? s.name, name: s.name }))).catch(() => []), []);
+  // Planners post open shifts from here too: the form needs the branches and shifts.
+  const { data: branches } = useApi(() => (tab === "open"
+    ? api.get<{ id: number; name: string }[]>("/branches").catch(() => [])
+    : Promise.resolve([] as { id: number; name: string }[])), [tab]);
   const pendingEntries = useMemo(() => new Set((requests.data?.items ?? [])
     .filter((r) => r.status === "PENDING_ACCEPTANCE" || r.status === "PENDING_APPROVAL").map((r) => r.entry?.id)), [requests.data]);
   const waiting = (incoming.data?.items ?? []).filter((r) => r.status === "PENDING_ACCEPTANCE").length;
@@ -142,7 +146,7 @@ export function MySchedule() {
         </Tabs>
       )}
       {tab === "requests" && canRequest ? <MyShiftRequests onChanged={() => { void requests.reload(); void incoming.reload(); void reload(); }} />
-        : tab === "open" && canRequest ? <OpenShiftsBoard />
+        : tab === "open" && canRequest ? <OpenShiftsBoard branches={branches ?? []} shifts={shiftList ?? []} />
         : tab === "availability" && canRequest ? <AvailabilityPanel />
         : error ? (
         error.status === 404

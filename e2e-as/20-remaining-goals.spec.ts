@@ -265,9 +265,9 @@ test("(d) finance issues and approves the invoice; a payroll-cost invoice is iss
   const cost = costs.find((c) => c.bill_to.name === `Alpha client ${STAMP}`)!;
   // 3 × (56,000 gross + 1,800 employer) = 173,400; +10 % fee = 190,740; +18 % GST = 225,073.20
   expect(cost.total).toBe("225073.20");
-  await rahul.page.getByTestId(`cost-issue-${cost.id}`).click();
-  await completeStepUpIfAsked(rahul.page, "alpha", "rahul");
+  await rahul.page.getByTestId(`cost-issue-${cost.id}`).click();  // the preparer is refused before any step-up
   await expect(rahul.page.getByText(/Someone other than the preparer/).first()).toBeVisible();
+  expect((await api(rahul.page, "GET", `/payroll/cost-invoices/${cost.id}`)).data.status).toBe("DRAFT");
   await sunil.page.goto("/payroll/invoices?tab=cost");
   await sunil.page.getByTestId(`cost-issue-${cost.id}`).click();
   await completeStepUpIfAsked(sunil.page, "alpha", "sunil");
@@ -317,6 +317,7 @@ test("(e) Kavya runs the go-live checklist, acceptance, country rules and an ind
   }
   await page.getByRole("tab", { name: "Industry templates" }).click();
   const bundle = page.getByTestId("bundle-AE_RETAIL_SPLIT");
+  await expect(bundle).toBeVisible({ timeout: 30_000 });
   if (await bundle.getByTestId("bundle-apply-AE_RETAIL_SPLIT").count()) {
     await bundle.getByTestId("bundle-apply-AE_RETAIL_SPLIT").click();
     await expect(page.getByText("Draft policies created").first()).toBeVisible();

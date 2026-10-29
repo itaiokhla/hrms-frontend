@@ -74,7 +74,7 @@ function ContractorList() {
               className="flex flex-wrap items-center gap-3 px-4 py-3" data-testid={`contractor-invoice-${inv.id}`}>
               <FileText className="h-4 w-4 text-primary" />
               <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium">{(inv as ContractorInvoice & { payee?: string }).payee ?? `Payee #${inv.payee_employee_id}`} · {inv.number ?? `Draft #${inv.id}`}</p>
+                <p className="text-sm font-medium">{(inv as ContractorInvoice & { payee?: { name?: string } | null }).payee?.name ?? `Payee #${inv.payee_employee_id}`} · {inv.number ?? `Draft #${inv.id}`}</p>
                 <p className="text-xs text-muted-foreground">{inv.lines.length} line(s){inv.external_number ? ` · their no. ${inv.external_number}` : ""}{inv.issue_date ? ` · issued ${fmtDate(inv.issue_date)}` : ""}</p>
               </div>
               <span className="tabular-nums text-sm font-medium">{fmtMoney(inv.total.amount, inv.total.currency)}</span>

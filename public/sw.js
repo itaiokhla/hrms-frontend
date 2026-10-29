@@ -3,15 +3,18 @@
  * 1. Offline punch: /punch and the static chunks it needs are cached, so the punch page opens without a network
  *    (the page's own offline queue stores punches until the connection returns). Navigations are network-first;
  *    /_next/static files are immutable and served cache-first. API calls are never cached, except the caller's own
- *    /api/v1/auth/me, kept as an offline fallback and removed at sign-out.
+ *    /api/v1/auth/me and the punch page's own capture policy and today state, kept as an offline fallback and
+ *    removed at sign-out.
  * 2. Push: the server sends a payload-less Web Push "tickle"; the worker fetches the newest unread notification over
  *    the user's own session and shows it (no notification text crosses the push service). A click opens its link.
  */
-const VERSION = "hrms-sw-v1";
+const VERSION = "hrms-sw-v2";
 const SHELL = `${VERSION}-shell`;
 const STATIC = `${VERSION}-static`;
 const ME = `${VERSION}-me`;
 const OFFLINE_PAGES = ["/punch"];
+// The caller's own data the punch page needs to open offline (last known copy; dropped at sign-out).
+const OFFLINE_API = ["/api/v1/auth/me", "/api/v1/me/attendance/capture", "/api/v1/attendance/me/today"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil((async () => {
@@ -63,7 +66,7 @@ self.addEventListener("fetch", (event) => {
     return;
   }
   if (request.method !== "GET") return;
-  if (url.pathname === "/api/v1/auth/me") {
+  if (OFFLINE_API.includes(url.pathname)) {
     event.respondWith(networkFirst(request, ME, true));
     return;
   }

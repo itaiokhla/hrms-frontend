@@ -253,7 +253,8 @@ export const VOCABULARIES: Record<VocabularyName, Vocabulary> = {
     "terminal": [
       "APPROVED",
       "CANCELLED",
-      "REJECTED"
+      "REJECTED",
+      "RETURNED"
     ],
     "states": {
       "APPROVED": {
@@ -275,6 +276,11 @@ export const VOCABULARIES: Record<VocabularyName, Vocabulary> = {
         "label": "Rejected",
         "tone": "danger",
         "glossary": "An approver rejected it. It has no effect."
+      },
+      "RETURNED": {
+        "label": "Returned",
+        "tone": "warning",
+        "glossary": "An approver sent it back for changes. The requester edits and submits it again."
       }
     }
   },
