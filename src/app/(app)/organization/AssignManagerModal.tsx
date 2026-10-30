@@ -185,14 +185,12 @@ export function AssignManagerModal({ open, onOpenChange, employee, allNodes, onA
                 <div
                   key={mgr.id}
                   onClick={() => setSelectedManagerId(mgr.id)}
-                  className={`flex cursor-pointer items-center gap-3 p-3 transition-colors hover:bg-muted/50 ${
-                    selected ? "bg-primary/5" : ""
-                  }`}
+                  className={`flex cursor-pointer items-center gap-3 p-3 transition-colors hover:bg-muted/50 ${selected ? "bg-primary/5" : ""
+                    }`}
                 >
                   <div
-                    className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border transition-colors ${
-                      selected ? "border-primary bg-primary text-primary-foreground" : "border-border bg-surface"
-                    }`}
+                    className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border transition-colors ${selected ? "border-primary bg-primary text-primary-foreground" : "border-border bg-surface"
+                      }`}
                   >
                     {selected && <Check className="h-3 w-3 stroke-[3]" />}
                   </div>

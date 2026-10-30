@@ -36,6 +36,21 @@
     --sidebar-active: 243 75% 59%;
     --sidebar-active-foreground: 0 0% 100%;
     --shadow: 225 40% 20%;
+    /* Leave colour tokens (backend LEAVE_COLOR_TOKENS; src/lib/leave/colors.ts). Platform constants, never
+       brandable; leave-neutral is the masked "Protected leave" / "Away" colour. Same hues as the shift-N palette. */
+    --leave-1: 221 83% 53%;
+    --leave-2: 142 76% 36%;
+    --leave-3: 32 95% 44%;
+    --leave-4: 0 72% 51%;
+    --leave-5: 262 83% 58%;
+    --leave-6: 192 91% 36%;
+    --leave-7: 333 71% 51%;
+    --leave-8: 85 85% 35%;
+    --leave-9: 21 90% 48%;
+    --leave-10: 243 75% 59%;
+    --leave-11: 175 84% 32%;
+    --leave-12: 215 16% 47%;
+    --leave-neutral: 220 9% 46%;
     --radius-lg: 0.5rem;
     --radius-xl: 0.875rem;
     --radius-2xl: 1.125rem;
@@ -74,6 +89,20 @@
     --sidebar-active: 243 75% 59%;
     --sidebar-active-foreground: 0 0% 100%;
     --shadow: 230 50% 2%;
+    /* Leave colour tokens, lifted for dark surfaces. */
+    --leave-1: 217 91% 65%;
+    --leave-2: 142 60% 50%;
+    --leave-3: 38 92% 55%;
+    --leave-4: 0 84% 66%;
+    --leave-5: 262 83% 72%;
+    --leave-6: 192 80% 52%;
+    --leave-7: 330 81% 68%;
+    --leave-8: 84 70% 50%;
+    --leave-9: 24 95% 60%;
+    --leave-10: 243 85% 72%;
+    --leave-11: 173 70% 45%;
+    --leave-12: 215 20% 65%;
+    --leave-neutral: 220 10% 62%;
     color-scheme: dark;
   }
 

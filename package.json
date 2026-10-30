@@ -55,11 +55,14 @@
     "zustand": "^4.4.1"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.10.1",
     "@playwright/test": "^1.52.0",
     "@testing-library/jest-dom": "^6.1.5",
     "@testing-library/react": "^14.1.2",
     "@types/jest": "^29.5.8",
+    "@types/jest-axe": "^3.5.9",
     "jest": "^29.7.0",
+    "jest-axe": "^9.0.0",
     "jest-environment-jsdom": "^29.7.0",
     "otpauth": "^9.3.6"
   },

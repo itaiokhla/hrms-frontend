@@ -126,6 +126,20 @@ export interface VersionPreview {
   dates_by_payroll_state: PayrollStates;
   scheduled_minutes: { old: number | null; new: number | null };
   warnings: WarningRow[];
+  /** §3.6 "Compliance (single-instance rules)" per working-time pack of the population (EC AS-SHF-18; never blocks). */
+  compliance?: ComplianceRow[];
+}
+
+export interface ComplianceRow {
+  rule_key: string;
+  severity: "WARN" | "INFO";
+  country: string;
+  zone: string;
+  employees: number;
+  measured: string | null;
+  limit: string | null;
+  unit: string | null;
+  message_key: string;
 }
 
 export interface VersionSaved {

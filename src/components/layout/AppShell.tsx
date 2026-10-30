@@ -19,6 +19,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
 import { useCallback, useEffect, useId, useMemo, useState, type ReactNode } from "react";
 
+import { useAgentStatus } from "@/components/agent/useAgentStatus";
 import { LocationTracker } from "@/components/attendance/LocationTracker";
 import { BrandMark, BrandWordmark } from "@/components/brand/BrandLogo";
 import { useBrand } from "@/components/brand/BrandProvider";
@@ -152,7 +153,9 @@ function Sidebar({ onClose }: { onClose?: () => void }) {
   const pathname = usePathname();
   const me = useSession((s) => s.me)!;
   const { brand } = useBrand();
-  const groups = useMemo(() => navFor(me), [me]);
+  // The assistant entry appears only when GET /agent/status says it is enabled for this user.
+  const assistant = useAgentStatus(me.user.id)?.enabled === true;
+  const groups = useMemo(() => navFor(me, { assistant }), [me, assistant]);
   const surface = brand.sidebar_style === "LIGHT" ? "light" : "dark";
   // The most specific matching entry is active (/settings/branding is not also "Company settings").
   const activeHref = navHrefs(groups)

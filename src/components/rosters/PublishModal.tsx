@@ -69,6 +69,7 @@ export function PublishModal({ periodId, nameOf, onPublished }: {
     try {
       const done = await rostersApi.publish(periodId, body, attempt.current.key);
       toast.success(done.nothing_to_publish ? "Nothing to publish."
+        : done.pending_approval ? "Sent for approval. The drafts are locked until a publisher decides."
         : `Roster published: ${done.entries_created ?? 0} added, ${done.entries_updated ?? 0} changed, ${done.entries_withdrawn ?? 0} removed.`);
       await route.close({ force: true });
       onPublished();

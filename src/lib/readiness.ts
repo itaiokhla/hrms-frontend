@@ -15,7 +15,12 @@ export interface PackEntity {
     scheduling: { notice_hours: number | null; late_addition_consent: boolean;
       predictability_pay_hours?: Record<string, number> };
     reduced_hours_windows?: { code: string; from: string; to: string; daily_max_hours: string }[];
+    exemptions?: { code: string; instrument: string; subdivisions: string[]; valid_from: string; valid_to: string | null;
+      waives: string[] }[];
   };
+  /** Branches holding pack exemptions (setting shift.working_time.held_exemptions; EC AS-CTY-17). */
+  exemptions?: { branch_id: number; branch: string; subdivision: string | null; held: string[]; applies: string[];
+    expiring: { code: string; valid_to: string; days_left: number }[] }[];
 }
 export interface Bundle {
   code: string; name: string; country: string; description: string; applied: boolean;

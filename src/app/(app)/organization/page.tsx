@@ -1,20 +1,14 @@
 "use client";
 
 import { Suspense, useMemo, useState } from "react";
-import { AnimatePresence, motion } from "framer-motion";
 import {
-  Building2,
   FolderTree,
   GitFork,
   Layers,
   Network,
   Plus,
   RotateCcw,
-  Search,
-  Shield,
-  ShieldAlert,
   ShieldCheck,
-  Table,
   Trash2,
   Users,
   UsersRound,
@@ -28,7 +22,7 @@ import { Button } from "@/components/ui/button";
 import { Field, Input, Select } from "@/components/ui/field";
 import { DataTable, EmptyState, ErrorState, PageHeader, SearchInput, TabPanel, Tabs } from "@/components/ui/layout";
 import { Modal, useConfirm } from "@/components/ui/overlay";
-import { Avatar, Badge, Card, Skeleton, StatusBadge } from "@/components/ui/primitives";
+import { Badge, Card, Skeleton, StatusBadge } from "@/components/ui/primitives";
 import { api, errorMessage } from "@/lib/api";
 import { can, canBeyondSelf, companyWide } from "@/lib/access";
 import { cn } from "@/lib/cn";
@@ -104,7 +98,7 @@ function Organization() {
     [debouncedSearch, departmentId, teamId, version]
   );
 
-  const canManage = hierarchy?.can_manage ?? (can(me, P.ORG_MANAGE_HIERARCHY) || can(me, P.EMPLOYEE_WRITE));
+  const canManage = hierarchy?.can_manage ?? (can(me, P.ORG_MANAGE_HIERARCHY) || can(me, P.EMPLOYEE_UPDATE));
 
   // Filter nodes client-side if securityFilter is active
   const displayedNodes = useMemo(() => {

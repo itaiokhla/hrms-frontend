@@ -6,7 +6,7 @@ import type { Me } from "./types";
 /**
  * The Settings left rail (3.8 §3.1), built like the main menu: every entry carries its own
  * permission check and empty groups disappear (contract §11.1: no blank menus). Entries outside
- * /settings (Roles & access, Leave policy, Holidays) open those pages.
+ * /settings (Roles & access, Holidays) open those pages.
  */
 export interface SettingsNavItem {
   label: string;
@@ -24,6 +24,7 @@ export interface SettingsNavGroup {
 }
 
 const payrollRead = (me: Me) => can(me, P.PAYROLL_CONFIGURATION_READ);
+const leaveConfigRead = (me: Me) => can(me, P.LEAVE_MANAGE_POLICY) || can(me, P.LEAVE_READ, "COMPANY");
 
 export const PAYROLL_SETTINGS_BASE = "/settings/payroll";
 
@@ -56,9 +57,20 @@ export const SETTINGS_NAV: SettingsNavGroup[] = [
     ],
   },
   {
+    // Leave v2 administration (03-leave/01 §11.1): setup and plans are also readable with company-wide leave:read.
+    // The legacy "Leave types & approvals" (/leaves?tab=policy) entry is replaced by Types and the approval route
+    // under Rules & settings.
+    label: "Leave",
+    items: [
+      { label: "Setup", href: "/settings/leave/setup", visible: leaveConfigRead },
+      { label: "Types", href: "/settings/leave/types", visible: (me) => can(me, P.LEAVE_MANAGE_POLICY) },
+      { label: "Plans", href: "/settings/leave/plans", visible: leaveConfigRead },
+      { label: "Rules & settings", href: "/settings/leave/rules", visible: (me) => can(me, P.LEAVE_MANAGE_POLICY) },
+    ],
+  },
+  {
     label: "People policies",
     items: [
-      { label: "Leave types & approvals", href: "/leaves?tab=policy", external: true, visible: (me) => can(me, P.LEAVE_MANAGE_POLICY) },
       { label: "Holiday calendars", href: "/holidays", external: true, visible: (me) => can(me, P.HOLIDAY_MANAGE) },
     ],
   },

@@ -53,3 +53,25 @@ describe("AS-M4 route guards", () => {
     expect(ERROR_TEXT.SELF_EDIT_FORBIDDEN).toMatch(/your own attendance/);
   });
 });
+
+describe("AS-M6 open shifts (A14, 03-shifts/03 §12.3)", () => {
+  const imran = me({ [P.ROSTER_READ]: ["SELF"], [P.ROSTER_REQUEST]: ["SELF"] });
+  const kiran = me({ [P.ROSTER_READ]: ["BRANCH"], [P.ROSTER_PLAN]: ["BRANCH"] });
+  const nobody = me({ [P.ATTENDANCE_READ]: ["SELF"] });
+
+  it("opens the board for requesters and planners on attendance v2 only", () => {
+    expect(ATTENDANCE_ROUTE_GUARDS["/attendance/open-shifts"](imran)).toBe(true);
+    expect(ATTENDANCE_ROUTE_GUARDS["/attendance/open-shifts"](kiran)).toBe(true);
+    expect(ATTENDANCE_ROUTE_GUARDS["/attendance/open-shifts"](nobody)).toBe(false);
+    expect(ATTENDANCE_ROUTE_GATES["/attendance/open-shifts"]).toBe("V2");
+    expect(children(imran)).toContain("Open shifts");
+    expect(children(nobody)).not.toContain("Open shifts");
+    expect(children(me({ [P.ROSTER_REQUEST]: ["SELF"] }, false))).not.toContain("Open shifts");
+  });
+
+  it("guards the open-shift page twin like the board (FU-AS-51 g)", () => {
+    const detail = ATTENDANCE_ROUTE_GUARDS["/attendance/open-shifts/[id]"];
+    expect([imran, kiran, nobody].map(detail)).toEqual([true, true, false]);
+    expect(ATTENDANCE_ROUTE_GATES["/attendance/open-shifts/[id]"]).toBe("V2");
+  });
+});

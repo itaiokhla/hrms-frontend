@@ -65,7 +65,9 @@ function SettingsForm() {
     setSaving(true);
     try {
       const next = await shiftRequestsApi.saveSettings({
-        requests_enabled: draft.requests_enabled, open_shifts_enabled: draft.open_shifts_enabled, requests: draft.requests,
+        requests_enabled: draft.requests_enabled, open_shifts_enabled: draft.open_shifts_enabled,
+        planner_cannot_publish: draft.planner_cannot_publish, publish_requires_approval: draft.publish_requires_approval,
+        requests: draft.requests,
         open_shift_eligibility: draft.open_shift_eligibility, availability: draft.availability,
         acknowledge_published_shifts: draft.acknowledge_published_shifts, reason: "Shift request settings changed",
       });
@@ -91,6 +93,12 @@ function SettingsForm() {
         <Switch label="Open shifts" testId="srs-open" disabled={!canManage}
           help="Planners post open shifts; eligible employees claim them." checked={draft.open_shifts_enabled}
           onChange={(v) => setDraft({ ...draft, open_shifts_enabled: v })} />
+        <Switch label="Planners cannot publish their own drafts" testId="srs-sod" disabled={!canManage}
+          help="The person who last saved a roster's drafts cannot publish them; a second person with Publish schedules does."
+          checked={draft.planner_cannot_publish} onChange={(v) => setDraft({ ...draft, planner_cannot_publish: v })} />
+        <Switch label="Roster publication needs approval" testId="srs-publish-approval" disabled={!canManage}
+          help="Planners send rosters for approval; a second person with Publish schedules approves them as previewed."
+          checked={draft.publish_requires_approval} onChange={(v) => setDraft({ ...draft, publish_requires_approval: v })} />
       </Card>
       <Card className={`space-y-4 p-5 ${draft.requests_enabled ? "" : "opacity-60"}`} data-testid="srs-kinds">
         <p className="flex items-center gap-2 font-medium"><ArrowLeftRight className="h-4 w-4 text-primary" /> Request kinds</p>

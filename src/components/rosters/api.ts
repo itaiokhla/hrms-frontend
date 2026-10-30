@@ -97,6 +97,9 @@ export interface RosterGridData {
   entries: RosterEntry[];
   drafts: RosterDraft[];
   shifts: RosterShift[];
+  /** §5.2: a publish goes to an approver; and one is waiting (drafts frozen). */
+  publish_requires_approval?: boolean;
+  approval_pending?: boolean;
 }
 
 /** `RuleResult` (03-shifts/02 §6.1): one rule finding over an employee's dates. */
@@ -135,6 +138,9 @@ export interface PublishDone {
   min_notice_hours?: string | null;
   results: RuleResult[];
   period?: RosterPeriod;
+  /** §5.2: the roster went to a publisher for approval instead of being published. */
+  pending_approval?: boolean;
+  approval_request_id?: number;
 }
 
 export interface ScheduleDay {
@@ -251,3 +257,165 @@ export interface GenerateAheadResult {
   generated: number;
   periods: { period_id: number; code: string; start_date: string; end_date: string; generated: number }[];
 }
+
+/* ------------------------------------------------------------------ rotations (app/routes/shift_rotations.py) */
+
+/** A token's shift (`{shift_id}`) or a second OFF token (`"OFF"`); `O` is always OFF and never mapped (§2.1). */
+export type TokenTarget = { shift_id: number } | "OFF";
+
+/** One of the 22 platform templates (`GET /rotations/templates`, `rotation_engine.TEMPLATES`, 03-shifts/02 §2.3). */
+export interface RotationTemplate {
+  key: string;
+  number: number;
+  name: string;
+  cycle_days: number;
+  tokens: string | null;
+  crew_rows: Record<string, string> | null;
+  crew_offsets: Record<string, number>;
+  coverage: Record<string, number>;
+  week_anchor_weekday: number | null;
+  note: string;
+  /** The research's default clock times per token (labels only; real times come from the mapped shifts). */
+  default_shifts: Record<string, { start: string; end: string }>;
+}
+
+export type RotationVersionStatus = "DRAFT" | "ACTIVE" | "SUPERSEDED";
+
+/** `serialize_version`: exactly one of `tokens` (base row + `crew_offsets`) or `crew_rows`. */
+export interface RotationVersion {
+  id: number;
+  pattern_id: number;
+  version_no: number;
+  status: RotationVersionStatus | string;
+  cycle_days: number;
+  tokens: string | null;
+  crew_rows: Record<string, string> | null;
+  crew_offsets: Record<string, number> | null;
+  token_map: Record<string, TokenTarget> | null;
+  coverage: Record<string, number> | null;
+  week_anchor_weekday: number | null;
+  lints_muted: string[];
+  content_hash: string;
+  row_version: number;
+}
+
+/** `serialize_pattern`: the pattern with every version, oldest first. */
+export interface RotationPattern {
+  id: number;
+  code: string;
+  name: string;
+  template_key: string | null;
+  branch_id: number | null;
+  legal_entity_id: number | null;
+  status: "ACTIVE" | "ARCHIVED" | string;
+  current_version_id: number | null;
+  row_version: number;
+  versions: RotationVersion[];
+}
+
+export interface RotationPatternBody {
+  code: string;
+  name: string;
+  template_key: string | null;
+}
+
+/** `PatternVersionIn`: a save always adds a new DRAFT version (an ACTIVE version is never edited, §2.5). */
+export interface RotationVersionBody {
+  cycle_days: number;
+  tokens: string | null;
+  crew_rows: Record<string, string> | null;
+  crew_offsets: Record<string, number>;
+  token_map: Record<string, TokenTarget>;
+  coverage: Record<string, number>;
+  week_anchor_weekday: number | null;
+  lints_muted: string[];
+}
+
+/** A version save answers its fatigue lints (WARN only, never blocking; §2.7). */
+export type SavedRotationVersion = RotationVersion & { lints: RuleResult[] };
+
+export interface RotationAssignment {
+  id: number;
+  pattern_version_id: number;
+  pattern_id: number;
+  pattern_code: string;
+  version_no: number;
+  target_kind: "EMPLOYEE" | "TEAM" | string;
+  employee_id: number | null;
+  employee_name: string | null;
+  employee_code: string | null;
+  team_id: number | null;
+  crew_code: string | null;
+  offset_days: number;
+  anchor_date: string;
+  effective_from: string;
+  effective_to: string | null;
+  status: "ACTIVE" | "ENDED" | string;
+  auto_publish: boolean;
+  row_version: number;
+}
+
+/** `POST /rotation-assignments/{id}/end` (UA-AS-161): the last day, a reason and the row's `row_version`. */
+export interface RotationAssignmentEndBody {
+  effective_to: string;
+  reason: string;
+  row_version?: number;
+}
+
+/** `RotationAssignmentIn` (§3.3): one assignment per employee from `effective_from`. */
+export interface RotationAssignBody {
+  pattern_version_id: number;
+  employee_ids: number[];
+  crew_code: string | null;
+  offset_days: number;
+  anchor_date: string;
+  effective_from: string;
+  effective_to: string | null;
+  auto_publish: boolean;
+}
+
+/** `GET /rotations/auto-publish/last`: the latest `roster.rotation_generate` job of the tenant (§3.5, EC AS-REL-06). */
+export interface AutoPublishRun {
+  job_id: number;
+  status: "QUEUED" | "RUNNING" | "SUCCEEDED" | "FAILED" | "DEAD" | "CANCELLED" | string;
+  local_date: string | null;
+  progress_done: number;
+  progress_total: number | null;
+  created_at: string | null;
+  finished_at: string | null;
+  summary: {
+    publications: number;
+    entries: number | null;
+    blocked_employees: number;
+    chunks: number | null;
+    failed_chunks: number | null;
+  } | null;
+  error: string | null;
+}
+
+export const rotationsApi = {
+  templates: () => request<RotationTemplate[]>("get", "/rotations/templates"),
+  list: () => request<RotationPattern[]>("get", "/rotations"),
+  /** One pattern with its versions: the API lists every pattern of the tenant, so a missing id is a 404. */
+  get: async (id: number | string): Promise<RotationPattern> => {
+    const found = (await rotationsApi.list()).find((p) => p.id === Number(id));
+    if (!found) throw new ShiftApiError(404, "Rotation pattern not found.", "NOT_FOUND");
+    return found;
+  },
+  create: (body: RotationPatternBody, idempotencyKey?: string) =>
+    request<RotationPattern & { lints: RuleResult[] }>("post", "/rotations", body, { idempotencyKey }),
+  addVersion: (patternId: number | string, body: RotationVersionBody, idempotencyKey?: string) =>
+    request<SavedRotationVersion>("post", `/rotations/${patternId}/versions`, body, { idempotencyKey }),
+  activate: (patternId: number | string, versionNo: number, idempotencyKey?: string) =>
+    request<RotationVersion>("post", `/rotations/${patternId}/versions/${versionNo}/activate`, undefined, { idempotencyKey }),
+  assignments: (params: { pattern_id?: number; skip?: number; limit?: number } = {}) =>
+    request<PageOf<RotationAssignment>>("get", "/rotation-assignments", undefined,
+      { params: clean({ skip: 0, limit: 100, ...params }) }),
+  assign: (body: RotationAssignBody, idempotencyKey?: string) =>
+    request<{ items: RotationAssignment[] }>("post", "/rotation-assignments", body, { idempotencyKey }),
+  /** ACTIVE → ENDED on `effective_to`; unpublished rotation drafts after it are deleted (published entries stay). */
+  endAssignment: (id: number, body: RotationAssignmentEndBody, idempotencyKey?: string) =>
+    request<RotationAssignment & { drafts_removed: number }>("post", `/rotation-assignments/${id}/end`, body,
+      { idempotencyKey }),
+  lastAutoPublish: () => request<AutoPublishRun | null>("get", "/rotations/auto-publish/last"),
+};

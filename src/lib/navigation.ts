@@ -1,12 +1,14 @@
 import {
   ArrowLeftRight,
   BarChart3,
+  Bot,
   Boxes,
   Calculator,
   CalendarCheck2,
   Fingerprint,
   CalendarClock,
   CalendarDays,
+  CalendarPlus,
   CalendarRange,
   ClipboardCheck,
   ClipboardList,
@@ -51,16 +53,22 @@ import { can, canAny, canBeyondSelf, companyWide } from "./access";
 import {
   attendanceV2, canClosePeriods, canManageAttendanceCutover, canManageDevices, canExportAttendance, canSeeApprovals, canSeeAttendanceExceptions, canSeeMuster,
   canSeeMySchedule, canSeeOnDuty, canSeeRosters, canSeeShifts, canSeeTeams, canSeeTimesheets, canManageSites,
-  canSeeMyPrivacy, canManageShiftRequests,
+  canSeeMyPrivacy, canManageShiftRequests, canSeeOpenShifts, canSeeRotations,
 } from "./attendance-routes";
+import { LEAVE_SECTIONS } from "./leave/routes";
 import { P, type PermissionCode } from "./permissions.generated";
 import type { Me } from "./types";
+
+/** Runtime facts beside `me` that decide a few entries (e.g. GET /agent/status for the assistant). */
+export interface NavFeatures {
+  assistant?: boolean;
+}
 
 export interface NavItem {
   label: string;
   href: string;
   icon: LucideIcon;
-  visible: (me: Me) => boolean;
+  visible: (me: Me, features?: NavFeatures) => boolean;
   /**
    * Sub-pages shown as a collapsible group under this item. The item stays a link of its own
    * (so a collapsed group still reads as one menu entry) and is shown when it or any child is visible.
@@ -282,6 +290,9 @@ export const NAV: NavGroup[] = [
     label: "Workspace",
     items: [
       { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard, visible: () => true },
+      // AI assistant (docs/leave_agent.md): only while GET /agent/status says enabled. The label avoids "Leave"
+      // (the e2e suites click the "Leave" link by an inexact name).
+      { label: "Assistant", href: "/agent", icon: Bot, visible: (_me, features) => !!features?.assistant },
       {
         label: "Attendance",
         href: "/attendance",
@@ -304,12 +315,18 @@ export const NAV: NavGroup[] = [
           },
           // AS-M1 A15: shift:manage ∨ shift:assign ∨ shift:read beyond SELF (an employee's SELF read never shows it).
           { label: "Shifts", href: "/attendance/shifts", icon: CalendarClock, visible: canSeeShifts },
+          // A16 (AS-M5): the Shifts predicate, V2 gate (09-ui-ux/01 §2).
+          { label: "Rotations", href: "/attendance/rotations", icon: History,
+            visible: (me) => attendanceV2(me) && canSeeRotations(me) },
           // AS-M5: roster:plan ∨ roster:publish ∨ roster:read beyond SELF; My schedule for any linked employee.
           { label: "Rosters", href: "/rosters", icon: CalendarRange, visible: canSeeRosters },
           { label: "My schedule", href: "/rosters/my-schedule", icon: CalendarDays, visible: canSeeMySchedule },
           // AS-M6 (G-15): swaps, changes, pickups to approve; open shifts; availability (V2 gate).
           { label: "Shift requests", href: "/attendance/shift-requests", icon: ArrowLeftRight,
             visible: (me) => attendanceV2(me) && canManageShiftRequests(me) },
+          // A14 (03-shifts/03 §12.3): one open-shift board for claimants and planners (V2 gate).
+          { label: "Open shifts", href: "/attendance/open-shifts", icon: CalendarPlus,
+            visible: (me) => attendanceV2(me) && canSeeOpenShifts(me) },
           // AS-M4 (G-13): module-neutral approvals inbox, on-duty / remote work, supervisor muster (V2 gate on muster).
           // Nested under Attendance (IG-AS-85) so the e2e sidebar label lists stay unchanged.
           { label: "Approvals", href: "/approvals?module=attendance", icon: Inbox, visible: canSeeApprovals },
@@ -342,6 +359,9 @@ export const NAV: NavGroup[] = [
         href: "/leaves",
         icon: CalendarRange,
         visible: (me) => canAny(me, [P.LEAVE_APPLY, P.LEAVE_READ, P.LEAVE_APPROVE, P.LEAVE_MANAGE_POLICY]),
+        // Leave v2 employee / manager pages (src/lib/leave/routes.ts). Nested, so the top-level sidebar labels the
+        // e2e suites assert stay the same; no child label contains "Leave" (inexact getByRole("link", "Leave")).
+        children: LEAVE_SECTIONS,
       },
       {
         label: "Holidays",
@@ -419,19 +439,19 @@ export const NAV: NavGroup[] = [
   },
 ];
 
-function filterItem(item: NavItem, me: Me): NavItem | null {
-  const children = item.children?.filter((child) => child.visible(me));
-  const own = item.visible(me);
+function filterItem(item: NavItem, me: Me, features?: NavFeatures): NavItem | null {
+  const children = item.children?.filter((child) => child.visible(me, features));
+  const own = item.visible(me, features);
   if (!own && !children?.length) return null;
   if (!children?.length) return { ...item, children: undefined };
   // A parent page the user can't open links to its first visible sub-page instead.
   return { ...item, href: own ? item.href : children[0].href, children };
 }
 
-export function navFor(me: Me): NavGroup[] {
+export function navFor(me: Me, features?: NavFeatures): NavGroup[] {
   return NAV.map((group) => ({
     ...group,
-    items: group.items.map((item) => filterItem(item, me)).filter((item): item is NavItem => item !== null),
+    items: group.items.map((item) => filterItem(item, me, features)).filter((item): item is NavItem => item !== null),
   })).filter((group) => group.items.length > 0);
 }
 

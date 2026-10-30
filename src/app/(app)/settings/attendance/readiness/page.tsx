@@ -178,6 +178,21 @@ function Packs() {
               <p className="text-xs text-muted-foreground sm:col-span-3">Sources: {e.pack.sources.join("; ")}</p>
             </div>
           )}
+          {(e.exemptions ?? []).length > 0 && (
+            <ul className="space-y-1 text-sm" data-testid={`pack-exemptions-${e.legal_entity_id}`}>
+              {(e.exemptions ?? []).map((b) => (
+                <li key={b.branch_id}>
+                  <span className="font-medium">{b.branch}</span> holds {b.held.join(", ")}
+                  {b.held.some((c) => !b.applies.includes(c)) && <span className="text-muted-foreground"> (not valid in {b.subdivision ?? "an unknown state"}: {b.held.filter((c) => !b.applies.includes(c)).join(", ")})</span>}
+                  {b.expiring.map((x) => (
+                    <Badge key={x.code} tone="warning" className="ms-2">
+                      {x.days_left < 0 ? `${x.code} ended ${fmtDate(x.valid_to)}` : `${x.code} ends ${fmtDate(x.valid_to)} (${x.days_left} days)`}
+                    </Badge>
+                  ))}
+                </li>
+              ))}
+            </ul>
+          )}
         </Card>
       ))}
       <Modal open={target !== null} onOpenChange={(o) => !o && setTarget(null)} title={target?.adopted ? "Stop applying country rules" : "Apply country rules"}

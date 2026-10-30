@@ -3,7 +3,7 @@
 import * as RadixTabs from "@radix-ui/react-tabs";
 import { motion, useReducedMotion } from "framer-motion";
 import { ChevronLeft, ChevronRight, Inbox, Lock, Search } from "lucide-react";
-import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { Children, isValidElement, useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import CountUp from "react-countup";
 
 import { cn } from "@/lib/cn";
@@ -208,6 +208,9 @@ export function Tabs({
   children: ReactNode;
 }) {
   const id = useId();
+  // A strip whose screen renders its own content (no TabPanel children) has no panel to point at: drop aria-controls,
+  // or every trigger references a missing id (axe aria-valid-attr-value).
+  const hasPanels = Children.toArray(children).some((c) => isValidElement(c) && c.type === TabPanel);
   return (
     <MotionSafe>
     <RadixTabs.Root value={value} onValueChange={onValueChange}>
@@ -216,6 +219,7 @@ export function Tabs({
           <RadixTabs.Trigger
             key={tab.value}
             value={tab.value}
+            {...(hasPanels ? {} : { "aria-controls": undefined })}
             className="relative flex shrink-0 items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium text-muted-foreground transition-colors data-[state=active]:text-foreground"
           >
             {value === tab.value && (

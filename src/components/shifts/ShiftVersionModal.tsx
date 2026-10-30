@@ -19,6 +19,12 @@ import { addDays, defaultValues, fmtMinutes, timesLabel, toVersionBody, validate
 const STATE_LABEL = { OPEN: "Open", INPUT_LOCKED: "Locked for payroll", FINALIZED: "Paid (final)" } as const;
 
 /** The dry-run result of §3.6: the version table, people affected, dates by payroll state, minutes old → new. */
+const COMPLIANCE_LABEL: Record<string, string> = {
+  DAILY_HOURS_EXCEEDED: "Longer than the daily limit",
+  SPREAD_OVER_EXCEEDED: "Spread over more hours than allowed",
+  OUTDOOR_MIDDAY_BAN: "Outdoor work in the midday ban",
+};
+
 export function VersionImpact({ preview, name }: { preview: VersionPreview; name: (id: number) => string }) {
   return (
     <div className="space-y-4 text-sm" data-testid="version-impact">
@@ -70,12 +76,31 @@ export function VersionImpact({ preview, name }: { preview: VersionPreview; name
         <h3 className="font-semibold">Scheduled time per day</h3>
         <p>{fmtMinutes(preview.scheduled_minutes.old)} → {fmtMinutes(preview.scheduled_minutes.new)}</p>
       </section>
+      {(preview.compliance ?? []).length > 0 && (
+        <section data-testid="version-compliance">
+          <h3 className="font-semibold">Compliance (one shift at a time)</h3>
+          <div role="status" className="mt-1 rounded-xl border border-warning/40 bg-warning-soft px-4 py-3">
+            <ul className="space-y-1">
+              {(preview.compliance ?? []).map((c, i) => (
+                <li key={i}>
+                  {COMPLIANCE_LABEL[c.rule_key] ?? c.rule_key} — {c.employees} {c.employees === 1 ? "employee" : "employees"} ({c.country})
+                  {c.measured && c.limit ? `: ${c.measured} vs ${c.limit}${c.unit ? ` ${c.unit}` : ""}` : ""}
+                  {c.message_key.endsWith(".not_verified") ? " · compliance not verified" : ""}
+                </li>
+              ))}
+            </ul>
+          </div>
+          <p className="mt-1 text-xs text-muted-foreground">Shown for planning; rosters and attendance apply the binding checks.</p>
+        </section>
+      )}
       {preview.warnings.length > 0 && (
-        <ul className="space-y-1 rounded-xl border border-warning/40 bg-warning-soft px-4 py-3" role="status">
-          {preview.warnings.map((w, i) => (
-            <li key={i}>{w.code === "VERSION_RANGE_TRUNCATED" ? `The change now ends on ${fmtDate(String(w.applied_effective_to))}, before the scheduled version.` : w.code}</li>
-          ))}
-        </ul>
+        <div role="status" className="rounded-xl border border-warning/40 bg-warning-soft px-4 py-3">
+          <ul className="space-y-1">
+            {preview.warnings.map((w, i) => (
+              <li key={i}>{w.code === "VERSION_RANGE_TRUNCATED" ? `The change now ends on ${fmtDate(String(w.applied_effective_to))}, before the scheduled version.` : w.code}</li>
+            ))}
+          </ul>
+        </div>
       )}
     </div>
   );

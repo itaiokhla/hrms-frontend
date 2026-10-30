@@ -1,7 +1,7 @@
 "use client";
 
 import { Eraser, Moon } from "lucide-react";
-import { useMemo, useRef, useState, type DragEvent, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type DragEvent, type KeyboardEvent, type ReactNode } from "react";
 
 import { ShiftChip } from "@/components/shifts/ShiftChip";
 import { colorOf } from "@/components/shifts/shiftModel";
@@ -9,8 +9,8 @@ import { cn } from "@/lib/cn";
 
 import type { RosterEmployee, RosterShift, RuleResult } from "./api";
 import {
-  DRAG_TYPE, applyPending, cellKey, cellLabel, cellText, dayHeader, isWeekend, paletteKey, parsePaletteKey, ruleLabel,
-  withPending, type Cell, type PaletteValue, EMPTY_CELL,
+  DRAG_TYPE, applyPending, cellKey, cellLabel, cellText, dateLabel, dayHeader, isWeekend, paletteKey, parsePaletteKey,
+  ruleLabel, withPending, type Cell, type PaletteValue, EMPTY_CELL,
 } from "./rosterModel";
 
 /* ------------------------------------------------------------------ palette */
@@ -20,6 +20,20 @@ import {
  * synthetic test events, so the drop falls back to this module-level note of the chip that started the drag.
  */
 const dragging: { current: string | null } = { current: null };
+
+/** The palette's choices: one per active shift, then Off and Clear (also offered by the cell editor). */
+function paletteItems(shifts: RosterShift[]): { key: string; label: string; testId: string; body: ReactNode }[] {
+  return [
+    ...shifts.filter((s) => s.status === "ACTIVE").map((s) => ({
+      key: paletteKey({ kind: "WORK", shiftId: s.id }), label: `${s.code} – ${s.name}`, testId: `palette-shift-${s.code}`,
+      body: <ShiftChip code={s.code} color={s.color_token} />,
+    })),
+    { key: "off", label: "Off", testId: "palette-off",
+      body: <span className="inline-flex items-center gap-1.5 text-sm font-semibold"><Moon className="h-3.5 w-3.5" aria-hidden />Off</span> },
+    { key: "clear", label: "Clear", testId: "palette-clear",
+      body: <span className="inline-flex items-center gap-1.5 text-sm font-semibold"><Eraser className="h-3.5 w-3.5" aria-hidden />Clear</span> },
+  ];
+}
 
 /**
  * The shift palette (§13): one chip per active shift, then Off and Clear. Each chip is draggable onto a cell
@@ -31,16 +45,7 @@ export function ShiftPalette({ shifts, selected, onSelect, disabled }: {
   onSelect: (key: string | null) => void;
   disabled?: boolean;
 }) {
-  const items: { key: string; label: string; testId: string; body: ReactNode }[] = [
-    ...shifts.filter((s) => s.status === "ACTIVE").map((s) => ({
-      key: paletteKey({ kind: "WORK", shiftId: s.id }), label: `${s.code} – ${s.name}`, testId: `palette-shift-${s.code}`,
-      body: <ShiftChip code={s.code} color={s.color_token} />,
-    })),
-    { key: "off", label: "Off", testId: "palette-off",
-      body: <span className="inline-flex items-center gap-1.5 text-sm font-semibold"><Moon className="h-3.5 w-3.5" aria-hidden />Off</span> },
-    { key: "clear", label: "Clear", testId: "palette-clear",
-      body: <span className="inline-flex items-center gap-1.5 text-sm font-semibold"><Eraser className="h-3.5 w-3.5" aria-hidden />Clear</span> },
-  ];
+  const items = paletteItems(shifts);
   return (
     <div role="toolbar" aria-label="Shift palette" data-testid="shift-palette" className="flex flex-wrap items-center gap-2">
       {items.map((item) => (
@@ -104,7 +109,41 @@ function CellBody({ cell, shift }: { cell: Cell; shift: RosterShift | undefined 
   );
 }
 
+/* ------------------------------------------------------------------ cell editor */
+
+/**
+ * The keyboard cell editor (09-ui-ux/02 §8.4: Enter or F2 opens the cell): the palette's choices for one cell. A
+ * choice, Cancel or Escape closes it and focus goes back to the cell.
+ */
+function CellEditor({ label, shifts, onPick, onClose }: {
+  label: string;
+  shifts: RosterShift[];
+  onPick: (key: string) => void;
+  onClose: () => void;
+}) {
+  const first = useRef<HTMLButtonElement>(null);
+  useEffect(() => { first.current?.focus(); }, []);
+  const chip = "inline-flex min-h-[36px] items-center rounded-xl border border-border bg-surface px-3 py-1 transition-colors hover:bg-surface-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-primary";
+  return (
+    <div role="dialog" aria-label={`Edit ${label}`} data-testid="cell-editor"
+      onKeyDown={(e) => { if (e.key === "Escape") { e.stopPropagation(); onClose(); } }}
+      className="flex flex-wrap items-center gap-2 rounded-2xl border border-primary/40 bg-surface p-3 shadow-sm">
+      <p className="w-full text-sm font-medium">{label}: set the cell to</p>
+      {paletteItems(shifts).map((item, i) => (
+        <button key={item.key} ref={i === 0 ? first : undefined} type="button" aria-label={item.label}
+          data-testid={item.testId.replace("palette-", "editor-")} onClick={() => onPick(item.key)} className={chip}>
+          {item.body}
+        </button>
+      ))}
+      <button type="button" onClick={onClose} className={cn(chip, "text-sm text-muted-foreground")}>Cancel</button>
+    </div>
+  );
+}
+
 /* ------------------------------------------------------------------ grid */
+
+/** Page Up / Page Down move by this many rows (09-ui-ux/02 §8.4). */
+const PAGE_ROWS = 10;
 
 export interface RosterGridProps {
   employees: RosterEmployee[];
@@ -124,16 +163,27 @@ export interface RosterGridProps {
  * The Roster Grid (03-shifts/02 §13; 09-ui-ux): employees down, the period's dates across (sticky name column,
  * horizontal scroll, weekends shaded). Published cells are solid chips, saved drafts dashed and marked "Draft",
  * this screen's edits marked "Unsaved". Every cell is a button named "Employee, date: CODE".
+ *
+ * Keyboard (09-ui-ux/02 §8.4, WAI-ARIA APG grid): one tab stop (the last focused cell); arrows move by cell (mirrored
+ * right to left), Home / End within the row, Ctrl+Home / Ctrl+End to the first / last cell, Page Up / Page Down by
+ * 10 rows. Enter or Space paints the selected palette chip, or opens the cell editor when none is selected; F2 always
+ * opens it; Escape closes it (focus back on the cell) or drops the palette selection.
  */
 export function RosterGrid({ employees, dates, cells, shifts, pending, onPendingChange, results, readOnly }: RosterGridProps) {
   const [selected, setSelected] = useState<string | null>(null);
   const [over, setOver] = useState<string | null>(null);
   const [hint, setHint] = useState("");
+  const [active, setActive] = useState<string | null>(null);
+  const [editing, setEditing] = useState<{ employee: RosterEmployee; date: string } | null>(null);
   const shown = useMemo(() => applyPending(cells, pending), [cells, pending]);
   const byId = useMemo(() => new Map(shifts.map((s) => [s.id, s])), [shifts]);
   const codeOf = (id: number) => byId.get(id)?.code;
   const latest = useRef(pending);
   latest.current = pending;
+  const buttons = useRef(new Map<string, HTMLButtonElement>());
+  const [activeEmployee, activeDate] = (active ?? "").split("|");
+  const stop = active && dates.includes(activeDate) && employees.some((e) => String(e.id) === activeEmployee)
+    ? active : employees.length && dates.length ? cellKey(employees[0].id, dates[0]) : null;
 
   const assign = (employee: RosterEmployee, date: string, raw: string | null) => {
     const value = parsePaletteKey(raw);
@@ -162,6 +212,39 @@ export function RosterGrid({ employees, dates, cells, shifts, pending, onPending
     dragging.current = null;
   };
 
+  const focusCell = (row: number, col: number) => {
+    const employee = employees[Math.max(0, Math.min(employees.length - 1, row))];
+    const date = dates[Math.max(0, Math.min(dates.length - 1, col))];
+    if (employee && date) buttons.current.get(cellKey(employee.id, date))?.focus();
+  };
+
+  const closeEditor = () => {
+    if (editing) buttons.current.get(cellKey(editing.employee.id, editing.date))?.focus();
+    setEditing(null);
+  };
+
+  const onCellKeyDown = (e: KeyboardEvent<HTMLButtonElement>, row: number, col: number) => {
+    const employee = employees[row];
+    const date = dates[col];
+    if (e.key === "Enter" || e.key === " " || e.key === "F2") {
+      e.preventDefault();  // handled here, so the browser does not also fire a click
+      if (e.key !== "F2" && selected) onCellClick(employee, date);
+      else if (!readOnly) setEditing({ employee, date });
+      return;
+    }
+    const step = e.currentTarget.closest("[dir]")?.getAttribute("dir") === "rtl" ? -1 : 1;
+    const ctrl = e.ctrlKey || e.metaKey;
+    const moves: Record<string, [number, number]> = {
+      ArrowRight: [row, col + step], ArrowLeft: [row, col - step], ArrowDown: [row + 1, col], ArrowUp: [row - 1, col],
+      Home: ctrl ? [0, 0] : [row, 0], End: ctrl ? [employees.length - 1, dates.length - 1] : [row, dates.length - 1],
+      PageDown: [row + PAGE_ROWS, col], PageUp: [row - PAGE_ROWS, col],
+    };
+    const to = moves[e.key];
+    if (!to) return;
+    e.preventDefault();
+    focusCell(to[0], to[1]);
+  };
+
   return (
     <div className="space-y-3" onKeyDown={(e) => { if (e.key === "Escape" && selected) setSelected(null); }}>
       {!readOnly && (
@@ -171,8 +254,14 @@ export function RosterGrid({ employees, dates, cells, shifts, pending, onPending
         </div>
       )}
       <p className="min-h-[1rem] text-xs text-muted-foreground" aria-live="polite" data-testid="grid-announcer">{hint}</p>
-      <div className="scrollbar-thin overflow-x-auto rounded-2xl border border-border" role="region" aria-label="Roster grid" tabIndex={0}>
-        <table className="border-separate border-spacing-0 text-sm" data-testid="roster-grid">
+      {editing && (
+        <CellEditor key={cellKey(editing.employee.id, editing.date)} shifts={shifts} onClose={closeEditor}
+          label={`${editing.employee.name}, ${dateLabel(editing.date)}`}
+          onPick={(value) => { assign(editing.employee, editing.date, value); closeEditor(); }} />
+      )}
+      <div className="scrollbar-thin overflow-x-auto rounded-2xl border border-border" role="region" aria-label="Roster grid">
+        <table role="grid" aria-rowcount={employees.length + 1} aria-colcount={dates.length + 1}
+          aria-readonly={readOnly || undefined} className="border-separate border-spacing-0 text-sm" data-testid="roster-grid">
           <caption className="sr-only">Roster grid: employees by date</caption>
           <thead>
             <tr>
@@ -193,13 +282,13 @@ export function RosterGrid({ employees, dates, cells, shifts, pending, onPending
             </tr>
           </thead>
           <tbody>
-            {employees.map((employee) => (
+            {employees.map((employee, row) => (
               <tr key={employee.id} data-testid={`grid-row-${employee.id}`}>
                 <th scope="row" className="sticky start-0 z-10 border-b border-e border-border bg-surface px-3 py-1.5 text-start font-medium">
                   <span className="block truncate">{employee.name}</span>
                   <span className="block text-xs font-normal text-muted-foreground">{employee.employee_code}</span>
                 </th>
-                {dates.map((date) => {
+                {dates.map((date, col) => {
                   const key = cellKey(employee.id, date);
                   const cell = shown.get(key) ?? EMPTY_CELL;
                   const issues = results?.get(key) ?? [];
@@ -209,6 +298,10 @@ export function RosterGrid({ employees, dates, cells, shifts, pending, onPending
                       <button type="button" data-testid={`cell-${employee.id}-${date}`}
                         data-state={cell.status.toLowerCase()} aria-disabled={readOnly || undefined}
                         aria-label={cellLabel(employee.name, date, cell, codeOf, issues.length)}
+                        tabIndex={key === stop ? 0 : -1}
+                        ref={(el) => { if (el) buttons.current.set(key, el); else buttons.current.delete(key); }}
+                        onFocus={() => setActive(key)}
+                        onKeyDown={(e) => onCellKeyDown(e, row, col)}
                         onClick={() => onCellClick(employee, date)}
                         onDragOver={(e) => { if (!readOnly) { e.preventDefault(); if (e.dataTransfer) e.dataTransfer.dropEffect = "copy"; setOver(key); } }}
                         onDragLeave={() => setOver((k) => (k === key ? null : k))}

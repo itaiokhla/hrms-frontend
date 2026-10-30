@@ -64,8 +64,16 @@ export interface OpenShift {
   priority_until: string | null; posted_at: string; expires_at: string; filled_at: string | null; note: string | null;
   released_by_employee_id: number | null; pending_claims: number; row_version: number;
   can_claim?: boolean; reasons?: string[]; warnings?: string[]; my_claim?: { id: number; status: RequestStatus } | null;
-  claims?: ShiftRequest[];
+  /** Detail only, for planners and approvers (§6.5): the claims by claim time and the instance's net minutes. */
+  claims?: OpenShiftClaim[]; scheduled_minutes?: number | null;
 }
+
+/** §6.5 ranking inputs of one claim (display only; the approver chooses, D-AS-68). */
+export interface ClaimRanking {
+  week_hours_before: number; week_hours_after: number; worst_severity: string; tags: string[]; in_priority_group: boolean;
+}
+
+export type OpenShiftClaim = ShiftRequest & { ranking?: ClaimRanking };
 
 export interface Availability {
   id: number; employee_id: number; employee_name: string | null; kind: "UNAVAILABLE" | "PREFERRED"; weekday: number | null;
@@ -87,6 +95,10 @@ export interface KindRules { enabled: boolean; cutoff_hours: number; approval_re
 export interface ShiftRequestSettings {
   requests_enabled: boolean;
   open_shifts_enabled: boolean;
+  /** shift.roster.planner_cannot_publish (EC AS-ROS-11): the last draft saver cannot publish. */
+  planner_cannot_publish: boolean;
+  /** shift.roster.publish_requires_approval (§5.2): rosters go to a publisher for approval. */
+  publish_requires_approval: boolean;
   policy_id: number | null;
   policy_legacy: boolean;
   requests: { swap: KindRules; drop: KindRules; release: KindRules; pickup_approval_required: boolean;
@@ -117,8 +129,11 @@ export const shiftRequestsApi = {
     call(() => http.post<ShiftRequest>(`/shift-requests/${id}/approve`, { note, acknowledged_warnings: acknowledged }, write())),
   reject: (id: number, note: string) => call(() => http.post<ShiftRequest>(`/shift-requests/${id}/reject`, { note }, write())),
 
-  openShifts: (from?: string, to?: string, status?: string) =>
-    call(() => http.get<{ items: OpenShift[]; can_post: boolean; from: string; to: string }>("/open-shifts", { params: { from, to, status } })),
+  /** `eligible_only` defaults to true on the server for employees (SP-AS-045); false also lists shifts they can't take.
+   * List key `roster.open_shifts` (saved views store from, to, status, eligible_only). */
+  openShifts: (from?: string, to?: string, status?: string, eligibleOnly?: boolean) =>
+    call(() => http.get<{ items: OpenShift[]; can_post: boolean; from: string; to: string }>("/open-shifts",
+      { params: { from, to, status, eligible_only: eligibleOnly } })),
   openShift: (id: number) => call(() => http.get<OpenShift>(`/open-shifts/${id}`)),
   postOpenShift: (body: { branch_id: number; shift_date: string; shift_id?: number; custom_start_time?: string;
     custom_end_time?: string; required_count: number; required_tags?: string[]; approval_required: boolean;
@@ -142,6 +157,13 @@ export const shiftRequestsApi = {
   createTag: (code: string, name: string) => call(() => http.post<SkillTag>("/skill-tags", { code, name }, write())),
   acknowledge: (entryId: number) =>
     call(() => http.post<{ entry_id: number; acknowledged_at: string }>(`/me/schedule/entries/${entryId}/acknowledge`, {}, write())),
+};
+
+/** Saved-views list key of the open-shift board (backend `saved_views.LIST_KEYS`, IG-AS-160). */
+export const OPEN_SHIFTS_LIST_KEY = "roster.open_shifts";
+
+export const OPEN_SHIFT_STATUS_LABEL: Record<OpenShift["status"], string> = {
+  OPEN: "Open", FILLED: "Filled", CANCELLED: "Cancelled", EXPIRED: "Expired",
 };
 
 export const KIND_LABEL: Record<RequestKind, string> = {

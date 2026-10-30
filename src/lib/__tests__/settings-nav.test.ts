@@ -43,8 +43,23 @@ describe("settings rail (3.8 §3.1)", () => {
     });
     const hrefs = settingsNavFor(admin).flatMap((g) => g.items.map((i) => i.href));
     expect(hrefs).toEqual(
-      expect.arrayContaining(["/settings", "/settings/branding", "/settings/organization", "/leaves?tab=policy", "/holidays", "/roles"]),
+      expect.arrayContaining(["/settings", "/settings/branding", "/settings/organization", "/settings/leave/types", "/holidays", "/roles"]),
     );
+    // The legacy leave policy tab is replaced by the Leave group.
+    expect(hrefs).not.toContain("/leaves?tab=policy");
+  });
+
+  it("shows the Leave group to leave administrators; setup and plans also to company-wide leave readers", () => {
+    const leave = (user: Me) => settingsNavFor(user).find((g) => g.label === "Leave")?.items.map((i) => i.href);
+    expect(leave(me({ [P.LEAVE_MANAGE_POLICY]: ["LEGAL_ENTITY"] }))).toEqual([
+      "/settings/leave/setup", "/settings/leave/types", "/settings/leave/plans", "/settings/leave/rules",
+    ]);
+    expect(leave(me({ [P.LEAVE_READ]: ["COMPANY"] }))).toEqual(["/settings/leave/setup", "/settings/leave/plans"]);
+    expect(leave(me({ [P.LEAVE_READ]: ["TEAM"] }))).toBeUndefined();
+    expect(leave(me({ [P.LEAVE_APPLY]: ["SELF"] }))).toBeUndefined();
+    const groups = settingsNavFor(me({ [P.LEAVE_MANAGE_POLICY]: ["COMPANY"] }));
+    expect(activeSettingsHref(groups, "/settings/leave/plans/12")).toBe("/settings/leave/plans");
+    expect(activeSettingsHref(groups, "/settings/leave/rules")).toBe("/settings/leave/rules");
   });
 
   it("marks the most specific in-shell entry active", () => {

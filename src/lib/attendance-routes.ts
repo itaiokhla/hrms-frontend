@@ -21,6 +21,11 @@ export function canSeeShifts(me: Me): boolean {
   return can(me, P.SHIFT_MANAGE) || can(me, P.SHIFT_ASSIGN) || canBeyondSelf(me, P.SHIFT_READ);
 }
 
+/** Rotations (A16, AS-M5): the Shifts predicate (09-ui-ux/01 §2 "same as Shifts"); the route and sidebar child are V2. */
+export function canSeeRotations(me: Me): boolean {
+  return canSeeShifts(me);
+}
+
 /** Assignment rules (tab and rule pages): `shift:assign` ∨ `shift:read` beyond SELF. */
 export function canSeeShiftRules(me: Me): boolean {
   return can(me, P.SHIFT_ASSIGN) || canBeyondSelf(me, P.SHIFT_READ);
@@ -115,6 +120,14 @@ export function canManageShiftRequests(me: Me): boolean {
   return can(me, P.ROSTER_APPROVE) || can(me, P.ROSTER_PLAN);
 }
 
+/**
+ * Open shifts (A14, 03-shifts/03 §12.3): `roster:request` ∨ `roster:plan`. The `shift.open_shifts.enabled` switch is not
+ * in `Me`; the board shows what the API returns and posting answers FEATURE_DISABLED when it is off.
+ */
+export function canSeeOpenShifts(me: Me): boolean {
+  return can(me, P.ROSTER_REQUEST) || can(me, P.ROSTER_PLAN);
+}
+
 /** Privacy & consents (AS-M2 §6.15): any linked employee. */
 export function canSeeMyPrivacy(me: Me): boolean {
   return me.employee !== null;
@@ -140,6 +153,8 @@ export const ATTENDANCE_ROUTE_GUARDS: Record<string, (me: Me) => boolean> = {
   "/attendance/shifts": canSeeShifts,
   "/attendance/shifts/[shift_id]": canSeeShifts,
   "/attendance/shift-rules/[rule_id]": canSeeShiftRules,
+  "/attendance/rotations": canSeeRotations,
+  "/attendance/rotations/[pattern_id]": canSeeRotations,
   "/rosters": canSeeRosters,
   "/rosters/[period_id]": canSeeRosters,
   "/rosters/my-schedule": canSeeMySchedule,
@@ -159,6 +174,8 @@ export const ATTENDANCE_ROUTE_GUARDS: Record<string, (me: Me) => boolean> = {
   "/attendance/sites/[site_id]": canManageSites,
   "/me/attendance/privacy": canSeeMyPrivacy,
   "/attendance/shift-requests": canManageShiftRequests,
+  "/attendance/open-shifts": canSeeOpenShifts,
+  "/attendance/open-shifts/[id]": canSeeOpenShifts,
   "/punch": canPunch,
 };
 
@@ -172,6 +189,9 @@ export const ATTENDANCE_ROUTE_GATES: Record<string, AttendanceGate> = {
   "/attendance/shifts": "GLOBAL",
   "/attendance/shifts/[shift_id]": "GLOBAL",
   "/attendance/shift-rules/[rule_id]": "GLOBAL",
+  // A16 (09-ui-ux/01 §2): rotations ship to v2 tenants only (`shift.rotations.enabled`, V-AS-09).
+  "/attendance/rotations": "V2",
+  "/attendance/rotations/[pattern_id]": "V2",
   "/rosters": "GLOBAL",
   "/rosters/[period_id]": "GLOBAL",
   "/rosters/my-schedule": "GLOBAL",
@@ -196,6 +216,8 @@ export const ATTENDANCE_ROUTE_GATES: Record<string, AttendanceGate> = {
   "/me/attendance/privacy": "GLOBAL",
   // AS-M6 needs attendance v2 (the API answers 409 ATTENDANCE_V2_REQUIRED otherwise).
   "/attendance/shift-requests": "V2",
+  "/attendance/open-shifts": "V2",
+  "/attendance/open-shifts/[id]": "V2",
   "/punch": "GLOBAL",
 };
 
@@ -208,6 +230,15 @@ export const ATTENDANCE_TABS: Record<string, readonly AttendanceTab[]> = {
     { value: "details", label: "Details" },
     { value: "versions", label: "Versions" },
     { value: "rules", label: "Rules", visible: canSeeShiftRules },
+  ],
+  // SP-AS-113 tab values; the editor's `history` tab waits for an entity history read.
+  "/attendance/rotations": [
+    { value: "patterns", label: "Patterns" },
+    { value: "assignments", label: "Assignments" },
+  ],
+  "/attendance/rotations/[pattern_id]": [
+    { value: "details", label: "Pattern" },
+    { value: "assignments", label: "Assignments" },
   ],
 };
 

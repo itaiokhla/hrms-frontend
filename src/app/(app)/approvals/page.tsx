@@ -27,6 +27,7 @@ const MODULES = [
   { value: "overtime", label: "Overtime" },
   { value: "task", label: "Tasks" },
   { value: "shift_request", label: "Shift requests" },
+  { value: "roster_publish", label: "Roster publication" },
   { value: "team_inputs", label: "Team payroll" },
 ];
 const TABS = ["pending", "decided", "stuck"] as const;

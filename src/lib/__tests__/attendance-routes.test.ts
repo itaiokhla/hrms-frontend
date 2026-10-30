@@ -1,7 +1,7 @@
 /** AS-M1 WI-AS-1.7: the shift route guards, tabs and the sidebar child share one predicate (09-ui-ux/01 §4.1). */
 import {
-  ATTENDANCE_ROUTE_GATES, ATTENDANCE_ROUTE_GUARDS, ATTENDANCE_TABS, canOpenTeam, canSeeMySchedule, canSeeRosters, canSeeShifts,
-  canSeeTeams, isIdSegment, visibleTabs,
+  ATTENDANCE_ROUTE_GATES, ATTENDANCE_ROUTE_GUARDS, ATTENDANCE_TABS, canOpenTeam, canSeeMySchedule, canSeeRosters, canSeeRotations,
+  canSeeShifts, canSeeTeams, isIdSegment, visibleTabs,
 } from "@/lib/attendance-routes";
 import { navFor } from "@/lib/navigation";
 import { P, type PermissionCode, type Scope } from "@/lib/permissions.generated";
@@ -43,10 +43,13 @@ describe("shift route guards", () => {
   it("gates every shift route GLOBAL (AS-M1 ships to every tenant) and the evaluation pages V2 (AS-M3)", () => {
     expect(Object.keys(ATTENDANCE_ROUTE_GATES).sort()).toEqual(Object.keys(ATTENDANCE_ROUTE_GUARDS).sort());
     // AS-M4 adds the muster (v2-only; requests live inside My attendance and the module-neutral inbox).
-    // AS-M6 adds the planners' shift requests page (v2-only: the API answers ATTENDANCE_V2_REQUIRED otherwise).
+    // AS-M6 adds the planners' shift requests page (v2-only: the API answers ATTENDANCE_V2_REQUIRED otherwise) and the
+    // open-shift board A14 and its page twin `/attendance/open-shifts/{id}` (09-ui-ux/01: V2; FU-AS-51 g).
+    // A16: Rotations and the pattern editor page are V2 (09-ui-ux/01 §2, `shift.rotations.enabled`).
     const v2 = ["/attendance/days/[employee_id]/[date]", "/attendance/exceptions", "/attendance/muster",
-      "/attendance/timesheets", "/attendance/period-close", "/attendance/shift-requests"];
-    expect(v2.map((path) => ATTENDANCE_ROUTE_GATES[path])).toEqual(["V2", "V2", "V2", "V2", "V2", "V2"]);
+      "/attendance/timesheets", "/attendance/period-close", "/attendance/shift-requests", "/attendance/open-shifts",
+      "/attendance/open-shifts/[id]", "/attendance/rotations", "/attendance/rotations/[pattern_id]"];
+    expect(v2.map((path) => ATTENDANCE_ROUTE_GATES[path])).toEqual(v2.map(() => "V2"));
     const others = Object.entries(ATTENDANCE_ROUTE_GATES).filter(([path]) => !v2.includes(path)).map(([, gate]) => gate);
     expect(new Set(others)).toEqual(new Set(["GLOBAL"]));
   });
@@ -81,6 +84,22 @@ describe("shift route guards", () => {
   it("shows the Shifts sidebar child with the same predicate", () => {
     expect(attendanceChildren(kavya)).toContain("/attendance/shifts");
     expect(attendanceChildren(priya)).not.toContain("/attendance/shifts");
+  });
+
+  it("opens Rotations with the Shifts predicate and shows its sidebar child only on v2 tenants (A16)", () => {
+    for (const user of [kavya, planner, supervisor, priya, me({})]) {
+      expect(canSeeRotations(user)).toBe(canSeeShifts(user));
+      for (const path of ["/attendance/rotations", "/attendance/rotations/[pattern_id]"]) {
+        expect(ATTENDANCE_ROUTE_GUARDS[path](user)).toBe(canSeeShifts(user));
+      }
+    }
+    expect(attendanceChildren(kavya)).not.toContain("/attendance/rotations");
+    expect(attendanceChildren({ ...kavya, attendance: { v2: true } })).toContain("/attendance/rotations");
+    expect(attendanceChildren({ ...planner, attendance: { v2: true } })).toContain("/attendance/rotations");
+    expect(attendanceChildren({ ...priya, attendance: { v2: true } })).not.toContain("/attendance/rotations");
+    expect(visibleTabs(ATTENDANCE_TABS["/attendance/rotations"], kavya).map((t) => t.value)).toEqual(["patterns", "assignments"]);
+    expect(visibleTabs(ATTENDANCE_TABS["/attendance/rotations/[pattern_id]"], kavya).map((t) => t.value))
+      .toEqual(["details", "assignments"]);
   });
 
   it("opens Rosters for plan, publish or a read beyond SELF, and My schedule for any linked employee (AS-M5)", () => {

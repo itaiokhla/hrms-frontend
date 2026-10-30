@@ -2,21 +2,28 @@
 
 import { AnimatePresence, motion } from "framer-motion";
 import { ArrowLeftRight, CalendarOff, CalendarPlus, Check, Hand, Inbox, Plus, Tag, Undo2, X } from "lucide-react";
+import Link from "next/link";
 import { useState } from "react";
 import toast from "react-hot-toast";
 
+import { useCan } from "@/components/access/Can";
+import { FilterBar } from "@/components/shared/FilterBar";
+import { SavedViews, ViewActions } from "@/components/shared/SavedViews";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Select, Textarea } from "@/components/ui/field";
 import { EmptyState, ErrorState } from "@/components/ui/layout";
 import { Modal } from "@/components/ui/overlay";
 import { Avatar, Badge, Card, Skeleton } from "@/components/ui/primitives";
 import { toApiError } from "@/lib/api";
+import { canManageShiftRequests } from "@/lib/attendance-routes";
 import { fmtDate, fmtDateTime } from "@/lib/format";
 import { useApi } from "@/lib/hooks";
+import { savedViewsApi } from "@/lib/savedViews";
 import {
-  KIND_LABEL, STATUS_LABEL, consentToConfirm, reasonText, shiftRequestsApi, warningsToConfirm, type Availability, type CheckResult,
-  type OpenShift, type RequestError, type ShiftRequest,
+  KIND_LABEL, OPEN_SHIFTS_LIST_KEY, OPEN_SHIFT_STATUS_LABEL, STATUS_LABEL, consentToConfirm, reasonText, shiftRequestsApi,
+  warningsToConfirm, type Availability, type CheckResult, type OpenShift, type RequestError, type ShiftRequest,
 } from "@/lib/shiftRequests";
+import { useListQuery } from "@/lib/useListQuery";
 
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
@@ -104,13 +111,12 @@ function ConsentConfirm({ open, noticeHours, onConfirm, onCancel }: {
   );
 }
 
-/** One request card with the actions this viewer may take (API `can`). */
-export function RequestCard({ r, onChanged }: { r: ShiftRequest; onChanged: () => void }) {
+/** The actions this viewer may take on a request (API `can`) with their dialogs: reject note, warnings, consent. */
+export function RequestActions({ r, onChanged }: { r: ShiftRequest; onChanged: () => void }) {
   const [rejecting, setRejecting] = useState(false);
   const [note, setNote] = useState("");
   const [pending, setPending] = useState<{ issues: CheckResult[]; action: "accept" | "approve" } | null>(null);
   const [consent, setConsent] = useState<{ keys: string[]; hours?: number } | null>(null);
-  const status = STATUS_LABEL[r.status];
   const warns = r.checks.filter((c) => c.severity === "WARN").map((c) => c.rule_key);
   const accept = (extra: string[] = [], agreed = false) => void act(
     () => shiftRequestsApi.accept(r.id, [...warns, ...extra], agreed), "Accepted",
@@ -119,21 +125,7 @@ export function RequestCard({ r, onChanged }: { r: ShiftRequest; onChanged: () =
   const approve = (extra: string[] = []) => void act(() => shiftRequestsApi.approve(r.id, undefined, [...warns, ...extra]),
     "Approved — the schedule changed", () => { setPending(null); onChanged(); }, (issues) => setPending({ issues, action: "approve" }));
   return (
-    <motion.li layout initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} className="space-y-2 px-4 py-3"
-      data-testid={`shift-request-${r.id}`}>
-      <div className="flex flex-wrap items-center gap-2">
-        <Badge tone="primary">{KIND_LABEL[r.kind]}</Badge>
-        <span className="flex-1 text-sm font-medium">{describe(r)}</span>
-        <Badge tone={status.tone} dot><span data-testid="shift-request-status">{status.label}</span></Badge>
-      </div>
-      <p className="text-xs text-muted-foreground">
-        Sent {fmtDateTime(r.submitted_at)}{r.expires_at && r.status.startsWith("PENDING") ? ` · cutoff ${fmtDateTime(r.expires_at)}` : ""}
-        {r.reason ? ` · “${r.reason}”` : ""}{r.decision_note ? ` · note: ${r.decision_note}` : ""}
-        {r.close_reason ? ` · ${reasonText(r.close_reason)}` : ""}
-      </p>
-      {r.checks.length > 0 && r.status.startsWith("PENDING") && (
-        <p className="flex flex-wrap gap-1 text-xs">{r.checks.map((c, i) => <Badge key={i} tone={c.severity === "BLOCK" ? "danger" : "warning"}>{reasonText(c.rule_key)}</Badge>)}</p>
-      )}
+    <>
       {r.can && (r.can.accept || r.can.decline || r.can.withdraw || r.can.approve || r.can.reject) && (
         <div className="flex flex-wrap gap-2">
           {r.can.accept && <Button size="sm" data-testid={`accept-${r.id}`} onClick={() => accept()}><Check className="h-4 w-4" /> Accept</Button>}
@@ -154,6 +146,30 @@ export function RequestCard({ r, onChanged }: { r: ShiftRequest; onChanged: () =
         onConfirm={(keys) => (pending?.action === "approve" ? approve(keys) : accept(keys))} />
       <ConsentConfirm open={consent !== null} noticeHours={consent?.hours} onCancel={() => setConsent(null)}
         onConfirm={() => consent && accept(consent.keys, true)} />
+    </>
+  );
+}
+
+/** One request card with the actions this viewer may take (API `can`). */
+export function RequestCard({ r, onChanged }: { r: ShiftRequest; onChanged: () => void }) {
+  const status = STATUS_LABEL[r.status];
+  return (
+    <motion.li layout initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} className="space-y-2 px-4 py-3"
+      data-testid={`shift-request-${r.id}`}>
+      <div className="flex flex-wrap items-center gap-2">
+        <Badge tone="primary">{KIND_LABEL[r.kind]}</Badge>
+        <span className="flex-1 text-sm font-medium">{describe(r)}</span>
+        <Badge tone={status.tone} dot><span data-testid="shift-request-status">{status.label}</span></Badge>
+      </div>
+      <p className="text-xs text-muted-foreground">
+        Sent {fmtDateTime(r.submitted_at)}{r.expires_at && r.status.startsWith("PENDING") ? ` · cutoff ${fmtDateTime(r.expires_at)}` : ""}
+        {r.reason ? ` · “${r.reason}”` : ""}{r.decision_note ? ` · note: ${r.decision_note}` : ""}
+        {r.close_reason ? ` · ${reasonText(r.close_reason)}` : ""}
+      </p>
+      {r.checks.length > 0 && r.status.startsWith("PENDING") && (
+        <p className="flex flex-wrap gap-1 text-xs">{r.checks.map((c, i) => <Badge key={i} tone={c.severity === "BLOCK" ? "danger" : "warning"}>{reasonText(c.rule_key)}</Badge>)}</p>
+      )}
+      <RequestActions r={r} onChanged={onChanged} />
     </motion.li>
   );
 }
@@ -201,22 +217,81 @@ export function ShiftRequestApprovals() {
   );
 }
 
-/** Open shifts: employees claim (acknowledging warnings), planners post / cancel and approve claims. */
-export function OpenShiftsBoard({ branches, shifts }: {
-  branches?: { id: number; name: string }[]; shifts?: { id: number; code: string }[];
-}) {
-  const { data, error, reload } = useApi(() => shiftRequestsApi.openShifts(), []);
-  const [posting, setPosting] = useState(false);
-  const [detail, setDetail] = useState<OpenShift | null>(null);
-  const [form, setForm] = useState({ branch_id: "", shift_date: "", shift_id: "", required_count: "1", tags: "", approval: true });
+/**
+ * Claim an open shift: its known warnings are acknowledged up front, new ones (422 WARNINGS_UNACKNOWLEDGED) open the
+ * warnings dialog and a claim inside the notice window (CONSENT_REQUIRED) asks for consent. Render `dialogs` once.
+ */
+export function useOpenShiftClaim(onDone: () => void) {
   const [confirm, setConfirm] = useState<{ shift: OpenShift; issues: CheckResult[] } | null>(null);
   const [consent, setConsent] = useState<{ shift: OpenShift; keys: string[]; hours?: number } | null>(null);
-
   const claim = (s: OpenShift, extra: string[] = [], agreed = false) => void act(
     () => shiftRequestsApi.claim(s.id, [...(s.warnings ?? []), ...extra], undefined, agreed),
     s.approval_required ? "Claim sent for approval" : "The shift is yours",
-    () => { setConfirm(null); setConsent(null); void reload(); }, (issues) => setConfirm({ shift: s, issues }),
+    () => { setConfirm(null); setConsent(null); onDone(); }, (issues) => setConfirm({ shift: s, issues }),
     (hours) => { setConfirm(null); setConsent({ shift: s, keys: extra, hours }); });
+  const dialogs = (
+    <>
+      <WarningsConfirm issues={confirm?.issues ?? null} action="Claim anyway" onCancel={() => setConfirm(null)}
+        onConfirm={(keys) => confirm && claim(confirm.shift, keys)} />
+      <ConsentConfirm open={consent !== null} noticeHours={consent?.hours} onCancel={() => setConsent(null)}
+        onConfirm={() => consent && claim(consent.shift, consent.keys, true)} />
+    </>
+  );
+  return { claim, dialogs };
+}
+
+export const openShiftTimes = (s: OpenShift) => s.shift_code ?? `${s.custom_start_time}–${s.custom_end_time}`;
+export const openShiftSource = (s: OpenShift) =>
+  s.source === "RELEASED" ? "Released by a coworker" : s.source === "UNCOVERED" ? "Cover needed" : "Extra shift";
+
+const OPEN_SHIFT_FILTERS = ["from", "to", "status", "eligible_only"] as const;
+const OPEN_SHIFT_SORTS = ["shift_date"] as const;
+type OpenShiftFilters = Partial<Record<(typeof OPEN_SHIFT_FILTERS)[number], string>>;
+
+/** A stored view query as URL values: `selectView` skips `false`, so booleans travel as "true" / "false". */
+function urlValues(query?: Record<string, unknown>): Record<string, unknown> | undefined {
+  return query && Object.fromEntries(Object.entries(query).map(([k, v]) => [k, typeof v === "boolean" ? String(v) : v]));
+}
+const queryKey = (query: Record<string, unknown>) =>
+  JSON.stringify(Object.entries(urlValues(query) ?? {}).filter(([k]) => k !== "columns").sort(([a], [b]) => a.localeCompare(b)));
+
+/**
+ * Open shifts: employees claim (acknowledging warnings), planners post / cancel and approve claims. Filters and saved
+ * views of list key `roster.open_shifts` live in the URL (from, to, status, eligible_only); "Show shifts I can't take"
+ * is `eligible_only=false` (SP-AS-045). Each card links to its page `/attendance/open-shifts/{id}`.
+ */
+export function OpenShiftsBoard({ branches, shifts }: {
+  branches?: { id: number; name: string }[]; shifts?: { id: number; code: string }[];
+}) {
+  const { me } = useCan();
+  const list = useListQuery({ filters: OPEN_SHIFT_FILTERS, sortKeys: OPEN_SHIFT_SORTS });
+  const views = useApi(() => savedViewsApi.list(OPEN_SHIFTS_LIST_KEY), []);
+  const f = list.filters as OpenShiftFilters;
+  const eligibleOnly = f.eligible_only === "false" ? false : f.eligible_only === "true" ? true : undefined;
+  const { data, error, reload } = useApi(() => shiftRequestsApi.openShifts(f.from, f.to, f.status, eligibleOnly),
+    [f.from, f.to, f.status, eligibleOnly]);
+  const [posting, setPosting] = useState(false);
+  const [detail, setDetail] = useState<OpenShift | null>(null);
+  const [form, setForm] = useState({ branch_id: "", shift_date: "", shift_id: "", required_count: "1", tags: "", approval: true });
+  const { claim, dialogs } = useOpenShiftClaim(() => void reload());
+  // Planners and approvers also see filled, cancelled and expired shifts; employees only ever get OPEN ones.
+  const planner = !!me && canManageShiftRequests(me);
+
+  const active = list.view;
+  const stored = [...(views.data?.system_views ?? []), ...(views.data?.views ?? [])].find((v) => String(v.id) === active)?.query;
+  const currentQuery: Record<string, unknown> = {
+    ...(f.from ? { from: f.from } : {}), ...(f.to ? { to: f.to } : {}), ...(f.status ? { status: f.status } : {}),
+    ...(eligibleOnly !== undefined ? { eligible_only: eligibleOnly } : {}),
+  };
+  const modified = !!active && !!stored && queryKey(stored) !== queryKey(currentQuery);
+  const chips = [
+    ...(f.from ? [{ key: "from", label: "From", values: [fmtDate(f.from)] }] : []),
+    ...(f.to ? [{ key: "to", label: "To", values: [fmtDate(f.to)] }] : []),
+    ...(f.status ? [{ key: "status", label: "Status", values: [OPEN_SHIFT_STATUS_LABEL[f.status as OpenShift["status"]] ?? f.status] }] : []),
+    ...(eligibleOnly !== undefined ? [{ key: "eligible_only", label: "Shifts",
+      values: [eligibleOnly ? "Only ones I can take" : "Including ones I can't take"] }] : []),
+  ];
+
   const post = async () => {
     try {
       await shiftRequestsApi.postOpenShift({ branch_id: Number(form.branch_id), shift_date: form.shift_date,
@@ -233,23 +308,58 @@ export function OpenShiftsBoard({ branches, shifts }: {
     try { setDetail(await shiftRequestsApi.openShift(s.id)); } catch (e) { toast.error(toApiError(e).message); }
   };
 
-  if (error) return <ErrorState message={error.message} onRetry={reload} />;
-  if (!data) return <Skeleton className="h-40" />;
   return (
-    <div className="space-y-3" data-testid="open-shifts">
-      {data.can_post && (
-        <div className="flex justify-end"><Button data-testid="open-shift-post" onClick={() => setPosting(true)}><Plus className="h-4 w-4" /> Post open shift</Button></div>
+    <div className="space-y-3">
+      {data?.can_post && (
+        <div className="flex justify-end">
+          <Button data-testid="open-shift-post" onClick={() => setPosting(true)}><Plus className="h-4 w-4" aria-hidden /> Post open shift</Button>
+        </div>
       )}
-      {data.items.length === 0 ? <Card><EmptyState icon={<CalendarPlus />} title="No open shifts" description="Shifts offered to the team appear here." /></Card> : (
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+      <Card className="p-0">
+        <FilterBar className="border-b-0"
+          views={<SavedViews data={views.data} active={active} modified={modified}
+            onSelect={(id, query) => list.selectView(id, urlValues(query))} />}
+          chips={chips} onRemoveChip={(key) => list.setFilter(key, null)} onClearAll={list.clearFilters}
+          resultCount={data?.items.length}
+          chipsEnd={<ViewActions listKey={OPEN_SHIFTS_LIST_KEY} data={views.data} active={active} query={currentQuery}
+            onReset={() => list.selectView(active ?? null, urlValues(stored))}
+            onSaved={(view) => { void views.reload(); list.selectView(String(view.id), urlValues(view.query)); }} />}
+        >
+          <Field label="From" className="w-40">
+            <Input type="date" value={f.from ?? ""} max={f.to} onChange={(e) => list.setFilter("from", e.target.value || null)} />
+          </Field>
+          <Field label="To" className="w-40">
+            <Input type="date" value={f.to ?? ""} min={f.from} onChange={(e) => list.setFilter("to", e.target.value || null)} />
+          </Field>
+          {planner && (
+            <Field label="Status" className="w-40">
+              <Select value={f.status ?? ""} onChange={(e) => list.setFilter("status", e.target.value || null)}>
+                <option value="">All statuses</option>
+                {Object.entries(OPEN_SHIFT_STATUS_LABEL).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+              </Select>
+            </Field>
+          )}
+          <label className="flex h-10 items-center gap-2 text-sm text-muted-foreground">
+            <input type="checkbox" data-testid="open-shifts-show-all" checked={eligibleOnly === false}
+              onChange={(e) => list.setFilter("eligible_only", e.target.checked ? "false" : null)} />
+            Show shifts I can&apos;t take
+          </label>
+        </FilterBar>
+      </Card>
+      {error ? <Card><ErrorState message={error.message} onRetry={reload} /></Card> : !data ? <Skeleton className="h-40" />
+        : data.items.length === 0 ? <Card data-testid="open-shifts"><EmptyState icon={<CalendarPlus />} title="No open shifts" description="Shifts offered to the team appear here." /></Card> : (
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3" data-testid="open-shifts">
           <AnimatePresence initial={false}>
             {data.items.map((s, i) => (
               <motion.div key={s.id} layout initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: Math.min(i, 8) * 0.03 }}>
                 <Card className="space-y-2 p-4" data-testid={`open-shift-${s.id}`}>
                   <div className="flex items-start justify-between gap-2">
                     <div>
-                      <p className="font-medium">{fmtDate(s.shift_date)} · {s.shift_code ?? `${s.custom_start_time}–${s.custom_end_time}`}</p>
-                      <p className="text-xs text-muted-foreground">{s.source === "RELEASED" ? "Released by a coworker" : s.source === "UNCOVERED" ? "Cover needed" : "Extra shift"} · {s.filled_count}/{s.required_count} filled</p>
+                      <p className="font-medium">
+                        <Link href={`/attendance/open-shifts/${s.id}`} data-testid={`open-shift-link-${s.id}`}
+                          className="hover:underline focus-visible:underline">{fmtDate(s.shift_date)} · {openShiftTimes(s)}</Link>
+                      </p>
+                      <p className="text-xs text-muted-foreground">{openShiftSource(s)} · {s.filled_count}/{s.required_count} filled</p>
                     </div>
                     <Badge tone={s.status === "OPEN" ? "info" : s.status === "FILLED" ? "success" : "neutral"}><span data-testid="open-shift-status">{s.status}</span></Badge>
                   </div>
@@ -283,10 +393,7 @@ export function OpenShiftsBoard({ branches, shifts }: {
           <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={form.approval} onChange={(e) => setForm({ ...form, approval: e.target.checked })} /> Claims need approval</label>
         </div>
       </Modal>
-      <WarningsConfirm issues={confirm?.issues ?? null} action="Claim anyway" onCancel={() => setConfirm(null)}
-        onConfirm={(keys) => confirm && claim(confirm.shift, keys)} />
-      <ConsentConfirm open={consent !== null} noticeHours={consent?.hours} onCancel={() => setConsent(null)}
-        onConfirm={() => consent && claim(consent.shift, consent.keys, true)} />
+      {dialogs}
       <Modal open={detail !== null} onOpenChange={(o) => !o && setDetail(null)} size="lg" title={detail ? `Claims · ${fmtDate(detail.shift_date)}` : "Claims"}>
         {detail && ((detail.claims ?? []).length === 0 ? <p className="text-sm text-muted-foreground">No claims yet.</p> : (
           <ul className="divide-y divide-border" data-testid="open-shift-claim-list">

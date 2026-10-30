@@ -44,8 +44,12 @@ export function RosterPeriodView({ id }: { id: string }) {
   const [busy, setBusy] = useState<"save" | "validate" | "discard" | null>(null);
 
   const period = data?.period;
-  const plan = can(me, P.ROSTER_PLAN) && !!period && !CLOSED.has(period.status);
-  const publish = can(me, P.ROSTER_PUBLISH) && !!period && !CLOSED.has(period.status);
+  // §5.2: while a publication waits for approval the drafts are frozen; with approval on, planners send for approval.
+  const frozen = !!data?.approval_pending;
+  const viaApproval = !!data?.publish_requires_approval;
+  const plan = can(me, P.ROSTER_PLAN) && !!period && !CLOSED.has(period.status) && !frozen;
+  const publish = (can(me, P.ROSTER_PUBLISH) || (viaApproval && can(me, P.ROSTER_PLAN))) && !!period
+    && !CLOSED.has(period.status) && !frozen;
   const dates = useMemo(() => (period ? periodDates(period.start_date, period.end_date) : []), [period]);
   const cells = useMemo(() => buildCells(data?.entries ?? [], data?.drafts ?? []), [data]);
   const badges = useMemo(() => resultsByCell(validation?.results), [validation]);
@@ -138,9 +142,16 @@ export function RosterPeriodView({ id }: { id: string }) {
               </Button>}
               {publish && <Button variant="secondary" data-testid="open-publish" disabled={unsaved > 0 || !period.drafts}
                 title={unsaved ? "Save your changes first" : undefined} onClick={() => publishRoute.openModal()}>
-                <Send className="h-4 w-4" aria-hidden /> Publish…
+                <Send className="h-4 w-4" aria-hidden /> {viaApproval ? "Send for approval…" : "Publish…"}
               </Button>}
             </>} />
+
+          {frozen && (
+            <p className="rounded-xl border border-info/40 bg-info-soft px-4 py-3 text-sm" role="status" data-testid="approval-pending">
+              This roster is waiting for publication approval, so its drafts are locked.{" "}
+              <Link className="font-medium text-primary underline" href="/approvals?module=roster_publish">Open approvals</Link>
+            </p>
+          )}
 
           <RosterErrorNotice error={actionError} nameOf={nameOf} />
 
