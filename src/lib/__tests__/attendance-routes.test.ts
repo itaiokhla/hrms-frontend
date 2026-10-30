@@ -24,6 +24,8 @@ const supervisor = me({ [P.SHIFT_READ]: ["DEPARTMENT"], [P.ATTENDANCE_READ]: ["D
 
 const attendanceChildren = (user: Me) =>
   navFor(user).flatMap((g) => g.items).find((i) => i.label === "Attendance")?.children?.map((c) => c.href) ?? [];
+const shiftsChildren = (user: Me) =>
+  navFor(user).flatMap((g) => g.items).find((i) => i.label === "Shifts")?.children?.map((c) => c.href) ?? [];
 
 describe("shift route guards", () => {
   it("opens Shifts for manage, assign or a read beyond SELF, never for an employee's SELF read", () => {
@@ -82,8 +84,8 @@ describe("shift route guards", () => {
   });
 
   it("shows the Shifts sidebar child with the same predicate", () => {
-    expect(attendanceChildren(kavya)).toContain("/attendance/shifts");
-    expect(attendanceChildren(priya)).not.toContain("/attendance/shifts");
+    expect(shiftsChildren(kavya)).toContain("/attendance/shifts");
+    expect(shiftsChildren(priya)).not.toContain("/attendance/shifts");
   });
 
   it("opens Rotations with the Shifts predicate and shows its sidebar child only on v2 tenants (A16)", () => {
@@ -93,10 +95,10 @@ describe("shift route guards", () => {
         expect(ATTENDANCE_ROUTE_GUARDS[path](user)).toBe(canSeeShifts(user));
       }
     }
-    expect(attendanceChildren(kavya)).not.toContain("/attendance/rotations");
-    expect(attendanceChildren({ ...kavya, attendance: { v2: true } })).toContain("/attendance/rotations");
-    expect(attendanceChildren({ ...planner, attendance: { v2: true } })).toContain("/attendance/rotations");
-    expect(attendanceChildren({ ...priya, attendance: { v2: true } })).not.toContain("/attendance/rotations");
+    expect(shiftsChildren(kavya)).not.toContain("/attendance/rotations");
+    expect(shiftsChildren({ ...kavya, attendance: { v2: true } })).toContain("/attendance/rotations");
+    expect(shiftsChildren({ ...planner, attendance: { v2: true } })).toContain("/attendance/rotations");
+    expect(shiftsChildren({ ...priya, attendance: { v2: true } })).not.toContain("/attendance/rotations");
     expect(visibleTabs(ATTENDANCE_TABS["/attendance/rotations"], kavya).map((t) => t.value)).toEqual(["patterns", "assignments"]);
     expect(visibleTabs(ATTENDANCE_TABS["/attendance/rotations/[pattern_id]"], kavya).map((t) => t.value))
       .toEqual(["details", "assignments"]);
@@ -111,9 +113,9 @@ describe("shift route guards", () => {
     expect(canSeeMySchedule(employee)).toBe(true);
     expect(canSeeMySchedule({ ...employee, employee: null })).toBe(false);
     expect(ATTENDANCE_ROUTE_GUARDS["/rosters/[period_id]"](rosterPlanner)).toBe(true);
-    expect(attendanceChildren(rosterPlanner)).toEqual(expect.arrayContaining(["/rosters", "/rosters/my-schedule"]));
-    expect(attendanceChildren(employee)).toContain("/rosters/my-schedule");
-    expect(attendanceChildren(employee)).not.toContain("/rosters");
+    expect(shiftsChildren(rosterPlanner)).toEqual(expect.arrayContaining(["/rosters", "/rosters/my-schedule"]));
+    expect(shiftsChildren(employee)).toContain("/rosters/my-schedule");
+    expect(shiftsChildren(employee)).not.toContain("/rosters");
   });
 
   it("opens Teams for team:read beyond SELF or team:manage, never for an employee's SELF read (X-M1, X 01 §15.3)", () => {

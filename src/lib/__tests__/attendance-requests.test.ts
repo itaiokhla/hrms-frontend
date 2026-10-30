@@ -64,9 +64,13 @@ describe("AS-M6 open shifts (A14, 03-shifts/03 §12.3)", () => {
     expect(ATTENDANCE_ROUTE_GUARDS["/attendance/open-shifts"](kiran)).toBe(true);
     expect(ATTENDANCE_ROUTE_GUARDS["/attendance/open-shifts"](nobody)).toBe(false);
     expect(ATTENDANCE_ROUTE_GATES["/attendance/open-shifts"]).toBe("V2");
-    expect(children(imran)).toContain("Open shifts");
-    expect(children(nobody)).not.toContain("Open shifts");
-    expect(children(me({ [P.ROSTER_REQUEST]: ["SELF"] }, false))).not.toContain("Open shifts");
+    // Open shifts lives in the Shifts section of the sidebar (SHIFT_ITEMS), not under Attendance.
+    const shiftChildren = (user: Me) =>
+      navFor(user).flatMap((g) => g.items).find((i) => i.label === "Shifts")?.children?.map((c) => c.label) ?? [];
+    expect(shiftChildren(imran)).toContain("Open shifts");
+    expect(children(imran)).not.toContain("Open shifts");
+    expect(shiftChildren(nobody)).not.toContain("Open shifts");
+    expect(shiftChildren(me({ [P.ROSTER_REQUEST]: ["SELF"] }, false))).not.toContain("Open shifts");
   });
 
   it("guards the open-shift page twin like the board (FU-AS-51 g)", () => {

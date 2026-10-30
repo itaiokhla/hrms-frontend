@@ -58,7 +58,7 @@ export interface RequestPreview {
 
 export interface OpenShift {
   id: number; shift_date: string; shift_id: number | null; shift_code: string | null; custom_start_time: string | null;
-  custom_end_time: string | null; branch_id: number; team_id: number | null; site_id: number | null;
+  custom_end_time: string | null; branch_id: number; branch_name?: string | null; team_id: number | null; site_id: number | null;
   required_count: number; filled_count: number; status: "OPEN" | "FILLED" | "CANCELLED" | "EXPIRED";
   source: "MANUAL" | "RELEASED" | "UNCOVERED"; approval_required: boolean; required_tags: string[];
   priority_until: string | null; posted_at: string; expires_at: string; filled_at: string | null; note: string | null;

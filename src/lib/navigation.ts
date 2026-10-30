@@ -114,6 +114,114 @@ const PAYROLL_APPROVE_CODES: PermissionCode[] = [
   P.PAYROLL_REIMBURSEMENTS_APPROVE,
 ];
 
+export const ATTENDANCE_ITEMS: NavItem[] = [
+  {
+    label: "Overview",
+    href: "/attendance",
+    icon: CalendarCheck2,
+    visible: (me) => canAny(me, [P.ATTENDANCE_MARK, P.ATTENDANCE_READ]),
+  },
+  {
+    label: "Timesheets",
+    href: "/attendance/timesheets",
+    icon: FileClock,
+    visible: (me) => attendanceV2(me) && canSeeTimesheets(me),
+  },
+  {
+    label: "Overtime",
+    href: "/overtime",
+    icon: Clock,
+    visible: (me) => canAny(me, [P.OVERTIME_REQUEST, P.OVERTIME_APPROVE]),
+  },
+  {
+    label: "Approvals",
+    href: "/approvals?module=attendance",
+    icon: Inbox,
+    visible: canSeeApprovals,
+  },
+  {
+    label: "Tasks",
+    href: "/tasks",
+    icon: ListChecks,
+    visible: (me) => canAny(me, [P.TASK_READ, P.TASK_MANAGE, P.TASK_APPROVE]),
+  },
+  { label: "On duty", href: "/attendance/on-duty", icon: Briefcase, visible: canSeeOnDuty },
+  { label: "Remote work", href: "/attendance/remote-work", icon: Home, visible: canSeeOnDuty },
+  {
+    label: "Muster",
+    href: "/attendance/muster",
+    icon: ClipboardCheck,
+    visible: (me) => attendanceV2(me) && canSeeMuster(me),
+  },
+  {
+    label: "Exceptions",
+    href: "/attendance/exceptions",
+    icon: ListChecks,
+    visible: (me) => attendanceV2(me) && canSeeAttendanceExceptions(me),
+  },
+  {
+    label: "Period close",
+    href: "/attendance/period-close",
+    icon: ShieldCheck,
+    visible: (me) => attendanceV2(me) && canClosePeriods(me),
+  },
+  { label: "Devices", href: "/attendance/devices", icon: Fingerprint, visible: canManageDevices },
+  { label: "Sites", href: "/attendance/sites", icon: MapPin, visible: canManageSites },
+  {
+    label: "Privacy & consents",
+    href: "/me/attendance/privacy",
+    icon: ShieldCheck,
+    visible: (me) => canSeeMyPrivacy(me) && can(me, P.ATTENDANCE_MARK),
+  },
+  { label: "Registers", href: "/reports/attendance", icon: FileClock, visible: canExportAttendance },
+  {
+    label: "Attendance setup",
+    href: "/settings/attendance/overview",
+    icon: Settings2,
+    visible: canManageAttendanceCutover,
+  },
+];
+
+export const SHIFT_ITEMS: NavItem[] = [
+  { label: "Shifts", href: "/attendance/shifts", icon: CalendarClock, visible: canSeeShifts },
+  {
+    label: "Rotations",
+    href: "/attendance/rotations",
+    icon: History,
+    visible: (me) => attendanceV2(me) && canSeeRotations(me),
+  },
+  { label: "Rosters", href: "/rosters", icon: CalendarRange, visible: canSeeRosters },
+  { label: "My schedule", href: "/rosters/my-schedule", icon: CalendarDays, visible: canSeeMySchedule },
+  {
+    label: "Shift requests",
+    href: "/attendance/shift-requests",
+    icon: ArrowLeftRight,
+    visible: (me) => attendanceV2(me) && canManageShiftRequests(me),
+  },
+  {
+    label: "Open shifts",
+    href: "/attendance/open-shifts",
+    icon: CalendarPlus,
+    visible: (me) => attendanceV2(me) && canSeeOpenShifts(me),
+  },
+];
+
+export function canSeeShiftsSection(me: Me): boolean {
+  return (
+    canSeeShifts(me) ||
+    canSeeRosters(me) ||
+    canSeeMySchedule(me) ||
+    (attendanceV2(me) && (canManageShiftRequests(me) || canSeeOpenShifts(me) || canSeeRotations(me)))
+  );
+}
+
+export const HOLIDAY_ITEMS: NavItem[] = [
+  { label: "Calendar", href: "/holidays", icon: CalendarDays, visible: (me) => can(me, P.HOLIDAY_READ) },
+  { label: "Calendars", href: "/holidays/calendars", icon: CalendarRange, visible: (me) => can(me, P.HOLIDAY_MANAGE) },
+  { label: "Work weeks", href: "/holidays/work-weeks", icon: CalendarCheck2, visible: (me) => can(me, P.HOLIDAY_MANAGE) },
+  { label: "Next year", href: "/holidays/rollover", icon: CalendarRange, visible: (me) => can(me, P.HOLIDAY_MANAGE) },
+];
+
 export const PAYROLL_WORKSPACE_ITEMS: NavItem[] = [
   {
     label: "Overview",
@@ -298,69 +406,20 @@ export const NAV: NavGroup[] = [
         href: "/attendance",
         icon: CalendarCheck2,
         visible: (me) => canAny(me, [P.ATTENDANCE_MARK, P.ATTENDANCE_READ]),
-        // Nested (not top-level) so existing sidebar label lists stay unchanged; managers approve here
-        // without needing any payroll permission.
-        children: [
-          {
-            label: "Overtime",
-            href: "/overtime",
-            icon: Clock,
-            visible: (me) => canAny(me, [P.OVERTIME_REQUEST, P.OVERTIME_APPROVE]),
-          },
-          {
-            label: "Tasks",
-            href: "/tasks",
-            icon: ListChecks,
-            visible: (me) => canAny(me, [P.TASK_READ, P.TASK_MANAGE, P.TASK_APPROVE]),
-          },
-          // AS-M1 A15: shift:manage ∨ shift:assign ∨ shift:read beyond SELF (an employee's SELF read never shows it).
-          { label: "Shifts", href: "/attendance/shifts", icon: CalendarClock, visible: canSeeShifts },
-          // A16 (AS-M5): the Shifts predicate, V2 gate (09-ui-ux/01 §2).
-          { label: "Rotations", href: "/attendance/rotations", icon: History,
-            visible: (me) => attendanceV2(me) && canSeeRotations(me) },
-          // AS-M5: roster:plan ∨ roster:publish ∨ roster:read beyond SELF; My schedule for any linked employee.
-          { label: "Rosters", href: "/rosters", icon: CalendarRange, visible: canSeeRosters },
-          { label: "My schedule", href: "/rosters/my-schedule", icon: CalendarDays, visible: canSeeMySchedule },
-          // AS-M6 (G-15): swaps, changes, pickups to approve; open shifts; availability (V2 gate).
-          { label: "Shift requests", href: "/attendance/shift-requests", icon: ArrowLeftRight,
-            visible: (me) => attendanceV2(me) && canManageShiftRequests(me) },
-          // A14 (03-shifts/03 §12.3): one open-shift board for claimants and planners (V2 gate).
-          { label: "Open shifts", href: "/attendance/open-shifts", icon: CalendarPlus,
-            visible: (me) => attendanceV2(me) && canSeeOpenShifts(me) },
-          // AS-M4 (G-13): module-neutral approvals inbox, on-duty / remote work, supervisor muster (V2 gate on muster).
-          // Nested under Attendance (IG-AS-85) so the e2e sidebar label lists stay unchanged.
-          { label: "Approvals", href: "/approvals?module=attendance", icon: Inbox, visible: canSeeApprovals },
-          { label: "On duty", href: "/attendance/on-duty", icon: Briefcase, visible: canSeeOnDuty },
-          { label: "Remote work", href: "/attendance/remote-work", icon: Home, visible: canSeeOnDuty },
-          { label: "Muster", href: "/attendance/muster", icon: ClipboardCheck,
-            visible: (me) => attendanceV2(me) && canSeeMuster(me) },
-          { label: "Timesheets", href: "/attendance/timesheets", icon: FileClock,
-            visible: (me) => attendanceV2(me) && canSeeTimesheets(me) },
-          { label: "Period close", href: "/attendance/period-close", icon: ShieldCheck,
-            visible: (me) => attendanceV2(me) && canClosePeriods(me) },
-          // AS-M2 / AS-M7 (G-17): kiosks, biometric terminals and agents, device mappings and CSV imports.
-          { label: "Devices", href: "/attendance/devices", icon: Fingerprint, visible: canManageDevices },
-          // AS-M2 (G-06 phase 3): geofences, office networks, QR posters; the employee's privacy & consents page.
-          { label: "Sites", href: "/attendance/sites", icon: MapPin, visible: canManageSites },
-          { label: "Privacy & consents", href: "/me/attendance/privacy", icon: ShieldCheck,
-            visible: (me) => canSeeMyPrivacy(me) && can(me, P.ATTENDANCE_MARK) },
-          // AS-M9 (G-20): statutory registers (Form 25, Form D), attendance:export.
-          { label: "Registers", href: "/reports/attendance", icon: FileClock, visible: canExportAttendance },
-          // AS-M3 (V2 gate): decided days with exceptions, for readers beyond SELF.
-          { label: "Exceptions", href: "/attendance/exceptions", icon: ListChecks,
-            visible: (me) => attendanceV2(me) && canSeeAttendanceExceptions(me) },
-          // AS-M3: the attendance v2 cut-over (Settings › Attendance › Overview), company-wide policy managers.
-          { label: "Attendance setup", href: "/settings/attendance/overview", icon: Settings2,
-            visible: canManageAttendanceCutover },
-        ],
+        children: ATTENDANCE_ITEMS,
+      },
+      {
+        label: "Shifts",
+        href: "/attendance/shifts",
+        icon: CalendarClock,
+        visible: canSeeShiftsSection,
+        children: SHIFT_ITEMS,
       },
       {
         label: "Leave",
         href: "/leaves",
         icon: CalendarRange,
         visible: (me) => canAny(me, [P.LEAVE_APPLY, P.LEAVE_READ, P.LEAVE_APPROVE, P.LEAVE_MANAGE_POLICY]),
-        // Leave v2 employee / manager pages (src/lib/leave/routes.ts). Nested, so the top-level sidebar labels the
-        // e2e suites assert stay the same; no child label contains "Leave" (inexact getByRole("link", "Leave")).
         children: LEAVE_SECTIONS,
       },
       {
@@ -368,13 +427,7 @@ export const NAV: NavGroup[] = [
         href: "/holidays",
         icon: CalendarDays,
         visible: (me) => can(me, P.HOLIDAY_READ),
-        // LH-M1 children (LH 09-ui-ux/01 §3.1); settings join with WI-1.10.
-        children: [
-          { label: "Calendar", href: "/holidays", icon: CalendarDays, visible: (me) => can(me, P.HOLIDAY_READ) },
-          { label: "Calendars", href: "/holidays/calendars", icon: CalendarRange, visible: (me) => can(me, P.HOLIDAY_MANAGE) },
-          { label: "Work weeks", href: "/holidays/work-weeks", icon: CalendarCheck2, visible: (me) => can(me, P.HOLIDAY_MANAGE) },
-          { label: "Next year", href: "/holidays/rollover", icon: CalendarRange, visible: (me) => can(me, P.HOLIDAY_MANAGE) },
-        ],
+        children: HOLIDAY_ITEMS,
       },
       {
         // Today's payslip page stays the entry; the v2 self-service pages expand below it.

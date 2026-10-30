@@ -43,7 +43,9 @@ test("(a)+(b) an open shift Imran cannot take is hidden until he asks; Kiran edi
   await expect(imran.page.getByTestId("open-shifts-show-all")).toBeVisible();
   await expect(imran.page.getByTestId(`open-shift-${id}`)).toHaveCount(0);
   await shot(imran.page, testInfo, "21a-board-default");
-  await imran.page.getByTestId("open-shifts-show-all").check();
+  // The checkbox follows the URL (eligible_only=false), which updates after the click: wait for it, don't .check().
+  await imran.page.getByTestId("open-shifts-show-all").click();
+  await expect(imran.page.getByTestId("open-shifts-show-all")).toBeChecked({ timeout: 20_000 });
   const card = imran.page.getByTestId(`open-shift-${id}`);
   await expect(card).toBeVisible({ timeout: 20_000 });
   await expect(card.getByTestId(`claim-${id}`)).toHaveCount(0);

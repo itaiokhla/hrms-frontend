@@ -9,10 +9,12 @@ import {
   LogOut,
   Menu as MenuIcon,
   Moon,
+  Search,
   ShieldAlert,
   Sun,
   UserRound,
   X,
+  type LucideIcon,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -99,21 +101,21 @@ export function AppShell({ children }: { children: ReactNode }) {
     <div className="flex min-h-screen bg-background">
       {/* One location controller per tab, alive across every in-app route change. */}
       <LocationTracker />
-      <aside className="sticky top-0 hidden h-screen w-[264px] shrink-0 lg:block">
+      <aside className="sticky top-0 hidden h-screen w-[272px] shrink-0 border-e border-sidebar-foreground/10 lg:block">
         <Sidebar />
       </aside>
       <AnimatePresence>
         {mobileOpen && (
           <>
             <motion.div
-              className="fixed inset-0 z-40 bg-black/40 lg:hidden"
+              className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm lg:hidden"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setMobileOpen(false)}
             />
             <motion.aside
-              className="fixed inset-y-0 start-0 z-50 w-[280px] lg:hidden"
+              className="fixed inset-y-0 start-0 z-50 h-[100dvh] w-[300px] max-w-[85vw] shadow-2xl lg:hidden"
               initial={{ x: brand.dir === "rtl" ? "100%" : "-100%" }}
               animate={{ x: 0 }}
               exit={{ x: brand.dir === "rtl" ? "100%" : "-100%" }}
@@ -151,64 +153,219 @@ export function AppShell({ children }: { children: ReactNode }) {
 
 function Sidebar({ onClose }: { onClose?: () => void }) {
   const pathname = usePathname();
+  const router = useRouter();
   const me = useSession((s) => s.me)!;
+  const { logout } = useSession();
+  const { resolvedTheme, setTheme } = useTheme();
   const { brand } = useBrand();
   // The assistant entry appears only when GET /agent/status says it is enabled for this user.
   const assistant = useAgentStatus(me.user.id)?.enabled === true;
   const groups = useMemo(() => navFor(me, { assistant }), [me, assistant]);
   const surface = brand.sidebar_style === "LIGHT" ? "light" : "dark";
+  const [search, setSearch] = useState("");
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
   // The most specific matching entry is active (/settings/branding is not also "Company settings").
   const activeHref = navHrefs(groups)
     .filter((href) => pathname === href || pathname.startsWith(`${href}/`))
     .sort((x, y) => y.length - x.length)[0];
   const hasLogo = !!(brand.logos.light || brand.logos.dark);
+
+  // Search filter across all top-level items and sub-items
+  const searchQuery = search.trim().toLowerCase();
+  const searchResults = useMemo(() => {
+    if (!searchQuery) return null;
+    const results: { label: string; href: string; parentLabel?: string; icon: LucideIcon }[] = [];
+    for (const group of groups) {
+      for (const item of group.items) {
+        if (item.label.toLowerCase().includes(searchQuery)) {
+          results.push({ label: item.label, href: item.href, parentLabel: group.label, icon: item.icon });
+        }
+        if (item.children) {
+          for (const child of item.children) {
+            if (child.label.toLowerCase().includes(searchQuery)) {
+              results.push({ label: child.label, href: child.href, parentLabel: `${item.label}`, icon: child.icon });
+            }
+          }
+        }
+      }
+    }
+    return results;
+  }, [groups, searchQuery]);
+
   return (
     <div className="flex h-full flex-col bg-sidebar text-sidebar-foreground">
-      <div className="flex items-center justify-between gap-3 px-5 pb-4 pt-5">
+      {/* Brand Header */}
+      <div className="flex items-center justify-between gap-3 px-4 pb-3 pt-4 sm:px-5 sm:pt-5 border-b border-sidebar-foreground/10">
         <Link
           href="/dashboard"
-          className={cn("flex min-w-0 gap-3", hasLogo ? "flex-col items-start gap-1.5" : "items-center")}
+          onClick={onClose}
+          className={cn("flex min-w-0 gap-3 group transition-opacity hover:opacity-90", hasLogo ? "flex-col items-start gap-1.5" : "items-center")}
           title={brand.display_name}
           data-testid="sidebar-brand"
         >
-          {hasLogo ? <BrandWordmark brand={brand} surface={surface} height={38} /> : <BrandMark brand={brand} />}
+          {hasLogo ? <BrandWordmark brand={brand} surface={surface} height={36} /> : <BrandMark brand={brand} />}
           <div className="min-w-0">
-            {!hasLogo && <p className="truncate font-display text-[15px] font-semibold">{brand.display_name || me.company.name}</p>}
-            <p className="truncate text-[11px] uppercase tracking-[0.18em] text-sidebar-muted" data-testid="sidebar-product">
+            {!hasLogo && (
+              <p className="truncate font-display text-[15px] font-semibold tracking-tight text-sidebar-foreground">
+                {brand.display_name || me.company.name}
+              </p>
+            )}
+            <p className="truncate text-[10px] font-semibold uppercase tracking-[0.18em] text-sidebar-muted" data-testid="sidebar-product">
               {brand.product_name}
             </p>
           </div>
         </Link>
         {onClose && (
-          <button onClick={onClose} className="rounded-lg p-1.5 text-sidebar-muted hover:bg-sidebar-foreground/10" aria-label="Close menu">
+          <button
+            onClick={onClose}
+            className="flex h-9 w-9 items-center justify-center rounded-xl text-sidebar-muted transition-colors hover:bg-sidebar-foreground/10 hover:text-sidebar-foreground lg:hidden"
+            aria-label="Close menu"
+          >
             <X className="h-5 w-5" />
           </button>
         )}
       </div>
-      <nav className="scrollbar-thin flex-1 space-y-6 overflow-y-auto px-3 py-2" aria-label="Main">
-        {groups.map((group) => (
-          <div key={group.label}>
-            <p className="mb-1.5 px-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-sidebar-muted">{group.label}</p>
+
+      {/* Quick Search */}
+      <div className="px-3 pt-3 pb-1">
+        <div className="relative flex items-center">
+          <Search className="pointer-events-none absolute start-3 h-3.5 w-3.5 text-sidebar-muted" />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Quick search tabs..."
+            className="w-full rounded-xl border border-sidebar-foreground/10 bg-sidebar-foreground/5 py-1.5 ps-8 pe-7 text-xs text-sidebar-foreground placeholder:text-sidebar-muted/60 transition-all focus:border-sidebar-active focus:bg-sidebar-foreground/10 focus:outline-none"
+          />
+          {search && (
+            <button
+              onClick={() => setSearch("")}
+              className="absolute end-2 flex h-5 w-5 items-center justify-center rounded-full text-sidebar-muted hover:text-sidebar-foreground"
+              aria-label="Clear search"
+            >
+              <X className="h-3 w-3" />
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Navigation or Search Results */}
+      {searchResults ? (
+        <div className="scrollbar-thin flex-1 overflow-y-auto px-3 py-2 space-y-1" aria-label="Search results">
+          <p className="px-2 text-[10px] font-bold uppercase tracking-wider text-sidebar-muted">
+            Matching Tabs ({searchResults.length})
+          </p>
+          {searchResults.length === 0 ? (
+            <div className="px-3 py-6 text-center text-xs text-sidebar-muted">
+              No matching features found for &ldquo;{search}&rdquo;
+            </div>
+          ) : (
             <ul className="space-y-0.5">
-              {group.items.map((item) =>
-                item.children?.length ? (
-                  <NavGroupEntry key={item.href} item={item} activeHref={activeHref} />
-                ) : (
-                  <li key={item.href}>
-                    <NavLink item={item} active={item.href === activeHref} />
-                  </li>
-                ),
-              )}
+              {searchResults.map((res) => (
+                <li key={res.href}>
+                  <Link
+                    href={res.href}
+                    onClick={() => {
+                      setSearch("");
+                      onClose?.();
+                    }}
+                    className={cn(
+                      "group flex items-center justify-between rounded-xl px-3 py-2 text-xs font-medium transition-colors",
+                      pathname === res.href
+                        ? "bg-sidebar-active text-sidebar-active-foreground font-semibold"
+                        : "text-sidebar-foreground/80 hover:bg-sidebar-foreground/10 hover:text-sidebar-foreground",
+                    )}
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <res.icon className="h-4 w-4 shrink-0 transition-transform group-hover:scale-110" />
+                      <span className="truncate">{res.label}</span>
+                    </div>
+                    {res.parentLabel && (
+                      <span className="ms-2 shrink-0 rounded-md bg-sidebar-foreground/10 px-1.5 py-0.5 text-[10px] text-sidebar-muted">
+                        {res.parentLabel}
+                      </span>
+                    )}
+                  </Link>
+                </li>
+              ))}
             </ul>
-          </div>
-        ))}
-      </nav>
-      <div className="m-3 rounded-2xl bg-sidebar-foreground/5 p-3">
-        <div className="flex items-center gap-3">
-          <Avatar name={me.user.full_name} src={me.employee?.has_photo ? `/api/v1/employees/${me.employee.id}/photo` : null} size={36} />
-          <div className="min-w-0">
-            <p className="truncate text-sm font-medium">{me.user.full_name}</p>
-            <p className="truncate text-xs text-sidebar-muted">{me.roles.map((r) => r.name).join(", ") || "No role"}</p>
+          )}
+        </div>
+      ) : (
+        <nav className="scrollbar-thin flex-1 space-y-5 overflow-y-auto px-3 py-2" aria-label="Main">
+          {groups.map((group) => (
+            <div key={group.label} className="space-y-1">
+              <div className="flex items-center justify-between px-3 pt-1">
+                <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-sidebar-muted/80">{group.label}</p>
+              </div>
+              <ul className="space-y-0.5">
+                {group.items.map((item) =>
+                  item.children?.length ? (
+                    <NavGroupEntry key={item.href} item={item} activeHref={activeHref} onClose={onClose} />
+                  ) : (
+                    <li key={item.href}>
+                      <NavLink item={item} active={item.href === activeHref} onClick={onClose} />
+                    </li>
+                  ),
+                )}
+              </ul>
+            </div>
+          ))}
+        </nav>
+      )}
+
+      {/* User profile & actions footer */}
+      <div className="m-3 mt-auto rounded-2xl border border-sidebar-foreground/10 bg-sidebar-foreground/5 p-2.5 backdrop-blur-sm">
+        <div className="flex items-center justify-between gap-2">
+          <Link
+            href="/account"
+            onClick={onClose}
+            className="flex items-center gap-2.5 min-w-0 group hover:opacity-90 transition-opacity"
+            title="My account"
+          >
+            <div className="relative shrink-0">
+              <Avatar
+                name={me.user.full_name}
+                src={me.employee?.has_photo ? `/api/v1/employees/${me.employee.id}/photo` : null}
+                size={34}
+              />
+              <span className="absolute bottom-0 end-0 h-2 w-2 rounded-full bg-emerald-500 ring-2 ring-sidebar" />
+            </div>
+            <div className="min-w-0">
+              <p className="truncate text-xs font-semibold leading-tight text-sidebar-foreground group-hover:underline">
+                {me.user.full_name}
+              </p>
+              <p className="truncate text-[10px] text-sidebar-muted">
+                {me.roles.map((r) => r.name).join(", ") || "User"}
+              </p>
+            </div>
+          </Link>
+          <div className="flex items-center gap-0.5 shrink-0">
+            {mounted && (
+              <button
+                type="button"
+                onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
+                className="rounded-lg p-1.5 text-sidebar-muted transition-colors hover:bg-sidebar-foreground/10 hover:text-sidebar-foreground"
+                aria-label="Toggle theme"
+                title={resolvedTheme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
+              >
+                {resolvedTheme === "dark" ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={async () => {
+                await logout();
+                router.replace("/login");
+              }}
+              className="rounded-lg p-1.5 text-sidebar-muted transition-colors hover:bg-danger-soft hover:text-danger"
+              aria-label="Sign out"
+              title="Sign out"
+            >
+              <LogOut className="h-3.5 w-3.5" />
+            </button>
           </div>
         </div>
       </div>
@@ -216,28 +373,46 @@ function Sidebar({ onClose }: { onClose?: () => void }) {
   );
 }
 
-function NavLink({ item, active, nested = false }: { item: NavItem; active: boolean; nested?: boolean }) {
+function NavLink({
+  item,
+  active,
+  nested = false,
+  onClick,
+}: {
+  item: NavItem;
+  active: boolean;
+  nested?: boolean;
+  onClick?: () => void;
+}) {
   return (
     <Link
       href={item.href}
       aria-current={active ? "page" : undefined}
+      onClick={onClick}
       className={cn(
-        "group relative flex min-w-0 flex-1 items-center gap-3 rounded-xl px-3 text-sm font-medium transition-colors",
-        nested ? "py-2" : "py-2.5",
+        "group relative flex min-w-0 flex-1 items-center gap-2.5 rounded-xl px-3 text-sm font-medium transition-colors",
+        nested ? "py-1.5 text-[13px]" : "py-2.5",
         active
-          ? "text-sidebar-active-foreground"
+          ? "font-semibold text-sidebar-active-foreground"
           : "text-sidebar-foreground/80 hover:bg-sidebar-foreground/10 hover:text-sidebar-foreground",
       )}
     >
       {active && (
         <motion.span
           layoutId="nav-active"
-          className="absolute inset-0 rounded-xl bg-sidebar-active shadow-glow"
+          className={cn(
+            "absolute inset-0 rounded-xl bg-sidebar-active shadow-glow",
+            nested && "bg-sidebar-active/95",
+          )}
           transition={{ type: "spring", stiffness: 420, damping: 36 }}
         />
       )}
       <item.icon
-        className={cn("relative shrink-0 transition-transform group-hover:scale-110", nested ? "h-4 w-4" : "h-[18px] w-[18px]")}
+        className={cn(
+          "relative shrink-0 transition-transform group-hover:scale-110",
+          nested ? "h-3.5 w-3.5 opacity-80 group-hover:opacity-100" : "h-[18px] w-[18px]",
+          active && "text-sidebar-active-foreground",
+        )}
       />
       <span className="relative truncate">{item.label}</span>
     </Link>
@@ -248,31 +423,61 @@ function NavLink({ item, active, nested = false }: { item: NavItem; active: bool
  * A menu entry with sub-pages: the entry itself stays a link, and a separate disclosure button
  * shows or hides its sub-pages (open by default while one of them is the current page).
  */
-function NavGroupEntry({ item, activeHref }: { item: NavItem; activeHref: string | undefined }) {
+function NavGroupEntry({
+  item,
+  activeHref,
+  onClose,
+}: {
+  item: NavItem;
+  activeHref: string | undefined;
+  onClose?: () => void;
+}) {
   const children = item.children ?? [];
   const childActive = children.some((c) => c.href === activeHref);
   const [open, setOpen] = useState(childActive);
   const reduceMotion = useReducedMotion();
   const listId = useId();
+
   useEffect(() => {
     if (childActive) setOpen(true);
   }, [childActive]);
+
   // While collapsed, the entry carries the highlight for its active sub-page; while open, the sub-page does.
   const selfActive = open ? item.href === activeHref && !childActive : item.href === activeHref || childActive;
+
   return (
-    <li>
+    <li className="relative">
       <div className="flex items-center gap-1">
-        <NavLink item={item} active={selfActive} />
+        <NavLink
+          item={item}
+          active={selfActive}
+          onClick={() => {
+            setOpen((prev) => !prev);
+            onClose?.();
+          }}
+        />
         <button
           type="button"
-          onClick={() => setOpen((o) => !o)}
+          onClick={(e) => {
+            e.stopPropagation();
+            setOpen((o) => !o);
+          }}
           aria-expanded={open}
           aria-controls={listId}
           aria-label={`${open ? "Hide" : "Show"} ${item.label} pages`}
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-sidebar-muted transition-colors hover:bg-sidebar-foreground/10 hover:text-sidebar-foreground"
+          className={cn(
+            "flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-sidebar-muted transition-colors hover:bg-sidebar-foreground/10 hover:text-sidebar-foreground",
+            open && "text-sidebar-foreground",
+          )}
         >
+          <span className="me-1 rounded-md bg-sidebar-foreground/10 px-1 py-0.5 text-[10px] font-semibold text-sidebar-muted">
+            {children.length}
+          </span>
           <ChevronDown
-            className={cn("h-4 w-4 transition-transform duration-200 motion-reduce:transition-none", open && "rotate-180")}
+            className={cn(
+              "h-3.5 w-3.5 transition-transform duration-200 motion-reduce:transition-none",
+              open && "rotate-180 text-sidebar-active",
+            )}
             aria-hidden
           />
         </button>
@@ -283,15 +488,15 @@ function NavGroupEntry({ item, activeHref }: { item: NavItem; activeHref: string
             id={listId}
             key="children"
             aria-label={item.label}
-            className="ms-5 space-y-0.5 overflow-hidden border-s border-sidebar-foreground/10 ps-2"
+            className="ms-4 space-y-0.5 overflow-hidden border-s border-sidebar-foreground/15 ps-2 pt-1 pb-1"
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: "auto", opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
             transition={{ duration: reduceMotion ? 0 : 0.22, ease: [0.22, 1, 0.36, 1] }}
           >
             {children.map((child) => (
-              <li key={child.href} className="pt-0.5 first:pt-1">
-                <NavLink item={child} nested active={child.href === activeHref} />
+              <li key={child.href} className="pt-0.5 first:pt-0">
+                <NavLink item={child} nested active={child.href === activeHref} onClick={onClose} />
               </li>
             ))}
           </motion.ul>

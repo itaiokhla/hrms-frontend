@@ -83,7 +83,7 @@ function OpenShiftView({ shift, branches, onChanged }: {
   const planner = can(me, P.ROSTER_PLAN);
   const viewer = shift.can_claim !== undefined || shift.my_claim !== undefined;
   const pending = (shift.claims ?? []).filter((c) => c.status.startsWith("PENDING")).length;
-  const branch = branches?.find((b) => b.id === shift.branch_id)?.name ?? `Branch #${shift.branch_id}`;
+  const branch = shift.branch_name ?? branches?.find((b) => b.id === shift.branch_id)?.name ?? `Branch #${shift.branch_id}`;
   const status = OPEN_SHIFT_STATUS_LABEL[shift.status];
 
   const cancel = async () => {

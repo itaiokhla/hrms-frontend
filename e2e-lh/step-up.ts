@@ -8,7 +8,7 @@ import path from "node:path";
 
 import type { Page } from "@playwright/test";
 
-import { BACKEND, account, expect, store, type CompanyKey } from "../e2e-as/support";
+import { BACKEND, account, api, expect, store, type CompanyKey } from "../e2e-as/support";
 
 const PYTHON = path.join(BACKEND, "venv", "Scripts", "python.exe");
 
@@ -33,6 +33,16 @@ async function outboxCode(companyId: number, email: string, since: number, timeo
     await new Promise((r) => setTimeout(r, 700));
   }
   throw new Error(`No step-up code for ${email} reached the outbox ${folder}`);
+}
+
+/** A fresh step-up for the signed-in page's session without the dialog (e-mailed code from the dev outbox). */
+export async function stepUpViaApi(page: Page, key: CompanyKey, person: string) {
+  const since = Date.now();
+  const sent = await api(page, "POST", "/payroll/step-up/email-code", {});
+  expect(sent.status, JSON.stringify(sent.data)).toBe(200);
+  const code = await outboxCode(store().companies[key].company_id, account(key, person).email, since);
+  const verified = await api(page, "POST", "/payroll/step-up", { code });
+  expect(verified.status, JSON.stringify(verified.data)).toBe(200);
 }
 
 /** If the "Confirm it's you" prompt is open, complete it with the e-mailed code (no-op when it does not appear). */
